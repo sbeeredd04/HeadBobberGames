@@ -45,6 +45,15 @@
       <label>Arena Size: <input type="range" id="arenaSizeSlider" min="400" max="4000" step="10" value="800"><span id="arenaSizeValue">800</span></label>
       <label>Camera Zoom: <input type="range" id="cameraZoomSlider" min="10" max="200" step="1" value="30"><span id="cameraZoomValue">30</span></label>
     </fieldset>
+    <fieldset><legend>Difficulty</legend>
+      <label>Obstacle Density: <select id="levelSelect">
+        <option value="5">Very Easy (5%)</option>
+        <option value="10">Easy (10%)</option>
+        <option value="15" selected>Medium (15%)</option>
+        <option value="20">Hard (20%)</option>
+        <option value="25">Insane (25%)</option>
+      </select></label>
+    </fieldset>
     <fieldset><legend>Actions</legend>
       <button id="saveSettingsBtn">Save Settings</button>
       <button id="exitBtn">Exit Game</button>
@@ -162,14 +171,7 @@
       gridHelper = new THREE.GridHelper(BOX, BOX / 10, 0x00ffff, 0x222222);
       scene.add(gridHelper);
       // regenerate obstacles
-      obstacles.forEach(o => scene.remove(o));
-      obstacles.length = 0;
-      for (let i = 0; i < 30; i++) {
-        const obs = new THREE.Mesh(obsGeo, new THREE.MeshStandardMaterial({ color: obsColor }));
-        obs.position.set((Math.random() - 0.5) * (BOX - 20), 2, (Math.random() - 0.5) * (BOX - 20));
-        scene.add(obs);
-        obstacles.push(obs);
-      }
+      generateObstacles();
     };
 
     // ─── Light‑cycle factory ─────────────────────────────
@@ -247,16 +249,22 @@
     const obstacles = [];
     const obsGeo = new THREE.BoxGeometry(4, 4, 4);
     const obsMat = new THREE.MeshStandardMaterial({ color: obsColor });
-    for (let i = 0; i < 30; i++) {
-      const obs = new THREE.Mesh(obsGeo, obsMat);
-      obs.position.set(
-        (Math.random() - 0.5) * (BOX - 20),
-        2,
-        (Math.random() - 0.5) * (BOX - 20)
-      );
-      scene.add(obs);
-      obstacles.push(obs);
+    const levelSelect = document.getElementById('levelSelect');
+    let obstaclePercent = parseInt(levelSelect.value);
+    function generateObstacles() {
+      obstacles.forEach(o => scene.remove(o));
+      obstacles.length = 0;
+      const count = Math.floor(BOX * obstaclePercent / 100);
+      for (let i = 0; i < count; i++) {
+        const obs = new THREE.Mesh(obsGeo, new THREE.MeshStandardMaterial({ color: obsColor }));
+        obs.position.set((Math.random() - 0.5) * (BOX - 20), 2, (Math.random() - 0.5) * (BOX - 20));
+        scene.add(obs);
+        obstacles.push(obs);
+      }
     }
+    // initial generate
+    generateObstacles();
+    levelSelect.onchange = () => { obstaclePercent = parseInt(levelSelect.value); generateObstacles(); };
     obsColorPicker.oninput = () => {
       obsColor = parseInt(obsColorPicker.value.slice(1), 16);
       obstacles.forEach(o => o.material.color.set(obsColorPicker.value));
@@ -491,6 +499,7 @@
       p1SpeedSlider.oninput(); p2SpeedSlider.oninput();
       p1JumpHeightSlider.oninput(); p2JumpHeightSlider.oninput();
       arenaSizeSlider.oninput(); cameraZoomSlider.oninput();
+      levelSelect.onchange();
       bgSelect.onchange();
       settingsMenu.style.visibility = 'hidden';
     };
@@ -563,3 +572,4 @@
   </script>
 </body>
 </html>
+``` 
