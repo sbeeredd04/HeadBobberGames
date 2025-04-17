@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Prismatrix with Collisions & Obstacles</title>
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Share+Tech+Mono&family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="gameTitle">Prismatrix</div>
+  <div id="scoreBoard">P1: 0 | P2: 0</div>
+  <div id="startOverlay">
+    <h1 style="font-size:64px;margin:0;">Prismatrix</h1>
+    <button id="startBtn">Start Game</button>
+  </div>
+  <div id="gameOverOverlay">
+    <h1 id="gameOverText"></h1>
+    <button id="retryBtn">Retry</button>
+  </div>
+  <!-- Key Bindings Modal -->
+  <div id="keyBindingsOverlay">
+    <div id="keyBindingsModal">
+      <h2>Key Bindings</h2>
+      <div id="keyBindingsList"></div>
+      <button id="saveKeyBindingsBtn">Save</button>
+    </div>
+  </div>
+  <div id="settingsGear">⚙</div>
+  <div id="settingsMenu">
+    <fieldset><legend>Appearance</legend>
+      <label>Player 1 Color: <input type="color" id="p1ColorPicker" value="#00ff00"></label>
+      <label>Player 2 Color: <input type="color" id="p2ColorPicker" value="#ff0000"></label>
+      <label>Obstacle Color: <input type="color" id="obsColorPicker" value="#ffff00"></label>
+      <label>Background: <select id="bgSelect">
+        <option value="none">None</option>
+      </select></label>
+    </fieldset>
+    <fieldset><legend>Gameplay</legend>
+      <label>Player 1 Speed: <input type="range" id="p1SpeedSlider" min="0.1" max="5" step="0.1" value="0.7"><span id="p1SpeedValue">0.7</span></label>
+      <label>Player 2 Speed: <input type="range" id="p2SpeedSlider" min="0.1" max="5" step="0.1" value="0.7"><span id="p2SpeedValue">0.7</span></label>
+      <label>Player 1 Jump Height: <input type="range" id="p1JumpHeightSlider" min="0.1" max="20" step="0.1" value="2"><span id="p1JumpHeightValue">2</span></label>
+      <label>Player 2 Jump Height: <input type="range" id="p2JumpHeightSlider" min="0.1" max="20" step="0.1" value="2"><span id="p2JumpHeightValue">2</span></label>
+    </fieldset>
+    <fieldset><legend>Arena & Camera</legend>
+      <label>Arena Size: <input type="range" id="arenaSizeSlider" min="400" max="4000" step="10" value="800"><span id="arenaSizeValue">800</span></label>
+      <label>Camera Zoom: <input type="range" id="cameraZoomSlider" min="10" max="200" step="1" value="30"><span id="cameraZoomValue">30</span></label>
+    </fieldset>
+    <fieldset><legend>Actions</legend>
+      <button id="saveSettingsBtn">Save Settings</button>
+      <button id="exitBtn">Exit Game</button>
+      <button id="keyBindingsBtn">Key Bindings</button>
+      <button id="pauseBtn">Pause</button>
+      <button id="resumeBtn">Resume</button>
+      <button id="restartBtn">Reset</button>
+    </fieldset>
+  </div>
+  <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+  <script>
+    // ─── Setup & State ─────────────────────────────────────
+    const scene    = new THREE.Scene();
+    // two cameras for split-screen
+    const camera1  = new THREE.PerspectiveCamera(60, (innerWidth/2)/innerHeight, 0.1, 2000);
+    const camera2  = new THREE.PerspectiveCamera(60, (innerWidth/2)/innerHeight, 0.1, 2000);
+    // make canvas transparent so CSS background shows through
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setClearColor(0x000000, 0);
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+    // overlays & settings
+    const startOverlay = document.getElementById('startOverlay');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const settingsGear = document.getElementById('settingsGear');
+    const settingsMenu = document.getElementById('settingsMenu');
+    const startBtn = document.getElementById('startBtn');
+    const retryBtn = document.getElementById('retryBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const p1ColorPicker = document.getElementById('p1ColorPicker');
+    const p2ColorPicker = document.getElementById('p2ColorPicker');
+    const obsColorPicker = document.getElementById('obsColorPicker');
+    let p1Color = parseInt(p1ColorPicker.value.slice(1), 16);
+    let p2Color = parseInt(p2ColorPicker.value.slice(1), 16);
+    let obsColor = parseInt(obsColorPicker.value.slice(1), 16);
+    // slider controls and displays
+    const p1SpeedSlider = document.getElementById('p1SpeedSlider');
+    const p1SpeedValue = document.getElementById('p1SpeedValue');
+    const p2SpeedSlider = document.getElementById('p2SpeedSlider');
+    const p2SpeedValue = document.getElementById('p2SpeedValue');
+    const p1JumpHeightSlider = document.getElementById('p1JumpHeightSlider');
+    const p1JumpHeightValue = document.getElementById('p1JumpHeightValue');
+    const p2JumpHeightSlider = document.getElementById('p2JumpHeightSlider');
+    const p2JumpHeightValue = document.getElementById('p2JumpHeightValue');
+    const arenaSizeSlider = document.getElementById('arenaSizeSlider');
+    const arenaSizeValue = document.getElementById('arenaSizeValue');
+    const cameraZoomSlider = document.getElementById('cameraZoomSlider');
+    const cameraZoomValue = document.getElementById('cameraZoomValue');
+    const exitBtn        = document.getElementById('exitBtn');
+    const gameOverText = document.getElementById('gameOverText');
+    const scoreBoard = document.getElementById('scoreBoard');
+    let p1Score = 0, p2Score = 0;
+    // jump state and duration (ms)
+    let jump1Start = 0, jump2Start = 0;
+    const jumpDuration = 500;
+    let jumpHeight1 = parseFloat(p1JumpHeightSlider.value);
+    let jumpHeight2 = parseFloat(p2JumpHeightSlider.value);
+    // update jump heights from settings
+    p1JumpHeightSlider.oninput = () => { jumpHeight1 = parseFloat(p1JumpHeightSlider.value); p1JumpHeightValue.textContent = p1JumpHeightSlider.value; };
+    p2JumpHeightSlider.oninput = () => { jumpHeight2 = parseFloat(p2JumpHeightSlider.value); p2JumpHeightValue.textContent = p2JumpHeightSlider.value; };
+    let turn1 = 0, turn2 = 0;
+    let speed1 = parseFloat(p1SpeedSlider.value), speed2 = parseFloat(p2SpeedSlider.value);
+    // update speeds
+    p1SpeedSlider.oninput = () => { speed1 = parseFloat(p1SpeedSlider.value); p1SpeedValue.textContent = p1SpeedSlider.value; };
+    p2SpeedSlider.oninput = () => { speed2 = parseFloat(p2SpeedSlider.value); p2SpeedValue.textContent = p2SpeedSlider.value; };
+     
+    let gameState = 'start'; // 'start', 'running', 'paused', 'gameover'
+    function resetGame(autoStart = false) {
+      // clear trails
+      for (let seg of trailSegments) scene.remove(seg);
+      trailSegments.length = 0;
+      // reset players
+      player.position.set(0, 0.5, 0);
+      player.rotation.set(0, Math.PI, 0);
+      player2.position.set(10, 0.5, 0);
+      player2.rotation.set(0, Math.PI, 0);
+      turn1 = turn2 = 0; gameOver = false;
+      gameState = autoStart ? 'running' : 'start';
+      startOverlay.style.visibility = autoStart ? 'hidden' : 'visible';
+      gameOverOverlay.style.visibility = 'hidden';
+      settingsMenu.style.visibility = 'hidden';
+    }
+
+    // ─── Lighting ──────────────────────────────────────────
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(5, 20, 7.5);
+    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0x404040));
+
+    // ─── Arena ─────────────────────────────────────────────
+    let BOX = parseInt(arenaSizeSlider.value); // dynamic arena size
+    let half = BOX / 2;
+    const boxGeo = new THREE.BoxGeometry(BOX, BOX, BOX);
+    const boxMat = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true });
+    const boundary = new THREE.Mesh(boxGeo, boxMat);
+    boundary.position.set(0, half - 0.5, 0);
+    scene.add(boundary);
+    let gridHelper = new THREE.GridHelper(BOX, BOX / 10, 0x00ffff, 0x222222);
+    scene.add(gridHelper);
+
+    // update arena size dynamically
+    arenaSizeSlider.oninput = () => {
+      BOX = parseInt(arenaSizeSlider.value);
+      half = BOX / 2;
+      arenaSizeValue.textContent = arenaSizeSlider.value;
+      // update boundary
+      boundary.geometry.dispose();
+      boundary.geometry = new THREE.BoxGeometry(BOX, BOX, BOX);
+      boundary.position.set(0, half - 0.5, 0);
+      // update grid helper
+      scene.remove(gridHelper);
+      gridHelper.geometry.dispose();
+      gridHelper = new THREE.GridHelper(BOX, BOX / 10, 0x00ffff, 0x222222);
+      scene.add(gridHelper);
+      // regenerate obstacles
+      obstacles.forEach(o => scene.remove(o));
+      obstacles.length = 0;
+      for (let i = 0; i < 30; i++) {
+        const obs = new THREE.Mesh(obsGeo, new THREE.MeshStandardMaterial({ color: obsColor }));
+        obs.position.set((Math.random() - 0.5) * (BOX - 20), 2, (Math.random() - 0.5) * (BOX - 20));
+        scene.add(obs);
+        obstacles.push(obs);
+      }
+    };
+
+    // ─── Light‑cycle factory ─────────────────────────────
+    function makeCycle(color) {
+      const group = new THREE.Group();
+      // glowing neon chassis
+      const bodyGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.6, 32, 1, true);
+      bodyGeo.rotateZ(Math.PI / 2);
+      const bodyMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, metalness: 0.5, roughness: 0.2 });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      group.add(body);
+      // seat and tail extension
+      const seatGeo = new THREE.BoxGeometry(0.3, 0.1, 0.5);
+      const seat = new THREE.Mesh(seatGeo, bodyMat);
+      seat.position.set(0, 0.15, 0);
+      group.add(seat);
+      const tailGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.6, 16);
+      const tail = new THREE.Mesh(tailGeo, bodyMat);
+      tail.rotation.x = Math.PI/2;
+      tail.position.set(0, 0.1, 0.8);
+      group.add(tail);
+      // neon side strips
+      const stripGeo = new THREE.BoxGeometry(0.05, 0.05, 1.6);
+      const stripMat = new THREE.MeshBasicMaterial({ color: color, emissive: color, emissiveIntensity: 1 });
+      ['left','right'].forEach((side, i) => {
+        const strip = new THREE.Mesh(stripGeo, stripMat);
+        strip.position.set((side==='left'? -0.35: 0.35), 0.05, 0);
+        group.add(strip);
+      });
+      // front fork connectors
+      const forkGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8);
+      const forkMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.2 });
+      const fork1 = new THREE.Mesh(forkGeo, forkMat);
+      fork1.position.set(0, 0, -0.4);
+      fork1.rotation.x = Math.PI/2;
+      group.add(fork1);
+      const fork2 = fork1.clone(); fork2.position.set(0, 0.1, -0.4);
+      group.add(fork2);
+      // wheels: front and back
+      const wheelGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.2, 16);
+      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.3 });
+      const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
+      frontWheel.rotation.z = Math.PI / 2;
+      frontWheel.position.set(0, -0.1, -0.8);
+      const backWheel = new THREE.Mesh(wheelGeo, wheelMat);
+      backWheel.rotation.z = Math.PI / 2;
+      backWheel.position.set(0, -0.1, 0.8);
+      group.add(frontWheel, backWheel);
+      // position above ground
+      group.position.y = 0.5;
+      scene.add(group);
+      return group;
+    }
+    const player = makeCycle(0x00ff00); // neon green
+    const player2 = makeCycle(0xff0000);
+
+    // ─── Trail & segment management ──────────────────────
+    const trailSegments = [];
+    function makeSegment(start, end, color, owner) {
+      const length = start.distanceTo(end);
+      const cyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.1, 0.1, length, 8),
+        new THREE.MeshStandardMaterial({ color })
+      );
+      cyl.position.copy(start).add(end).multiplyScalar(0.5);
+      cyl.lookAt(end);
+      cyl.rotateX(Math.PI / 2);
+      cyl.userData.birth = Date.now();
+      cyl.userData.owner = owner;
+      scene.add(cyl);
+      trailSegments.push(cyl);
+    }
+
+    // ─── Obstacles ─────────────────────────────────────────
+    const obstacles = [];
+    const obsGeo = new THREE.BoxGeometry(4, 4, 4);
+    const obsMat = new THREE.MeshStandardMaterial({ color: obsColor });
+    for (let i = 0; i < 30; i++) {
+      const obs = new THREE.Mesh(obsGeo, obsMat);
+      obs.position.set(
+        (Math.random() - 0.5) * (BOX - 20),
+        2,
+        (Math.random() - 0.5) * (BOX - 20)
+      );
+      scene.add(obs);
+      obstacles.push(obs);
+    }
+    obsColorPicker.oninput = () => {
+      obsColor = parseInt(obsColorPicker.value.slice(1), 16);
+      obstacles.forEach(o => o.material.color.set(obsColorPicker.value));
+    };
+
+    // ─── Controls & state ─────────────────────────────────
+    let turnSpeed = 0.04,
+        camHeight1 = 20,
+        camHeight2 = 20,
+        camDistance = parseFloat(cameraZoomSlider.value),
+        gameOver = false;
+
+    // Keydown handling with dynamic bindings and binding mode
+    window.addEventListener('keydown', e => {
+      // capture for key binding
+      if (listeningFor) {
+        keyMapping[listeningFor] = e.code;
+        listeningFor = null;
+        renderKeyBindings();
+        return;
+      }
+      // start game from start screen
+      if (gameState === 'start' && e.code === keyMapping.start) {
+        startBtn.onclick();
+        return;
+      }
+      // game controls when running or paused
+      if (gameState === 'running' || gameState === 'paused') {
+        // pause/resume
+        if (e.code === keyMapping.pause) {
+          if (gameState === 'running') pauseBtn.onclick();
+          else if (gameState === 'paused') resumeBtn.onclick();
+          return;
+        }
+        if (gameState !== 'running') return;
+        // movement
+        if (e.code === keyMapping.p1Left)  turn1 = 1;
+        else if (e.code === keyMapping.p1Right) turn1 = -1;
+        else if (e.code === keyMapping.p2Left)  turn2 = 1;
+        else if (e.code === keyMapping.p2Right) turn2 = -1;
+        // jump
+        else if (e.code === keyMapping.p1Jump && Date.now() - jump1Start > jumpDuration) {
+          jump1Start = Date.now();
+        }
+        else if (e.code === keyMapping.p2Jump && Date.now() - jump2Start > jumpDuration) {
+          jump2Start = Date.now();
+        }
+        // camera tilt
+        else if (e.code === keyMapping.p1CamUp)   camHeight1 = Math.min(camHeight1 + 2, BOX - 10);
+        else if (e.code === keyMapping.p1CamDown) camHeight1 = Math.max(camHeight1 - 2, 5);
+        else if (e.code === keyMapping.p2CamUp)   camHeight2 = Math.min(camHeight2 + 2, BOX - 10);
+        else if (e.code === keyMapping.p2CamDown) camHeight2 = Math.max(camHeight2 - 2, 5);
+      }
+    });
+    
+    // Keyup to stop turning
+    window.addEventListener('keyup', e => {
+      if (e.code === keyMapping.p1Left && turn1 > 0)  turn1 = 0;
+      else if (e.code === keyMapping.p1Right && turn1 < 0) turn1 = 0;
+      else if (e.code === keyMapping.p2Left && turn2 > 0) turn2 = 0;
+      else if (e.code === keyMapping.p2Right && turn2 < 0) turn2 = 0;
+    });
+
+    // ─── Resize ──────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      // update both cameras for half-width aspect
+      camera1.aspect = (innerWidth/2) / innerHeight;
+      camera2.aspect = (innerWidth/2) / innerHeight;
+      camera1.updateProjectionMatrix();
+      camera2.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    // ─── Collision Detection ─────────────────────────────
+    function detectCollision(cycle, owner) {
+      // out of bounds
+      if (Math.abs(cycle.position.x) > half || cycle.position.z > half || cycle.position.z < -half) return true;
+      // obstacle collision
+      for (let obs of obstacles) if (obs.position.distanceTo(cycle.position) < 2) return true;
+      // trail collision
+      const now = Date.now();
+      for (let seg of trailSegments) {
+        if (now - seg.userData.birth < 50) continue;
+        if (cycle.position.distanceTo(seg.position) < 0.7) return true;
+      }
+      return false;
+    }
+
+    function endGame(winner) {
+      gameOver = true;
+      gameState = 'gameover';
+      // hide start overlay when game over
+      startOverlay.style.visibility = 'hidden';
+      gameOverOverlay.style.visibility = 'visible';
+      settingsMenu.style.visibility = 'hidden';
+    }
+
+    // ─── Animation loop ──────────────────────────────────
+    function animate() {
+      requestAnimationFrame(animate);
+      // update when running
+      if (gameState === 'running' && !gameOver) {
+        const now = Date.now();
+        const jumping1 = now - jump1Start < jumpDuration;
+        const jumping2 = now - jump2Start < jumpDuration;
+        // update vertical position for jump
+        const height1 = jumping1 ? 0.5 + jumpHeight1 * Math.sin(Math.PI * (now - jump1Start)/jumpDuration) : 0.5;
+        const height2 = jumping2 ? 0.5 + jumpHeight2 * Math.sin(Math.PI * (now - jump2Start)/jumpDuration) : 0.5;
+        player.position.y = height1;
+        player2.position.y = height2;
+        // — player1 movement, roll tilt & trail
+        player.rotation.y += turn1 * turnSpeed;
+        // roll tilt effect
+        const maxTilt = Math.PI / 8;
+        player.rotation.z = turn1 * maxTilt;
+        const f1 = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion).multiplyScalar(speed1);
+        const p1Old = player.position.clone(); player.position.add(f1);
+        makeSegment(p1Old, player.position, p1Color, 'p1');
+        // — player2 movement, roll tilt & trail
+        player2.rotation.y += turn2 * turnSpeed;
+        player2.rotation.z = turn2 * maxTilt;
+        const f2 = new THREE.Vector3(0, 0, -1).applyQuaternion(player2.quaternion).multiplyScalar(speed2);
+        const p2Old = player2.position.clone(); player2.position.add(f2);
+        makeSegment(p2Old, player2.position, p2Color, 'p2');
+
+        // — remove old trail segments (older than 5s)
+        for (let i = trailSegments.length - 1; i >= 0; i--) {
+          const seg = trailSegments[i];
+          if (now - seg.userData.birth > 5000) {
+            scene.remove(seg);
+            trailSegments.splice(i, 1);
+          }
+        }
+
+        // — check collisions for both players (skip while jumping)
+        if (!jumping1 && detectCollision(player, 'p1')) {
+          p2Score++;
+          scoreBoard.textContent = `P1: ${p1Score} | P2: ${p2Score}`;
+          gameOverText.innerText = 'Player 2 Wins!';
+          endGame('p2');
+        } else if (!jumping2 && detectCollision(player2, 'p2')) {
+          p1Score++;
+          scoreBoard.textContent = `P1: ${p1Score} | P2: ${p2Score}`;
+          gameOverText.innerText = 'Player 1 Wins!';
+          endGame('p1');
+        }
+        // — head-on body collision
+        if (!jumping1 && !jumping2 && player.position.distanceTo(player2.position) < 1) {
+          // if both collide, assign based on who moved last; default draw to player2 win
+          p2Score++;
+          scoreBoard.textContent = `P1: ${p1Score} | P2: ${p2Score}`;
+          gameOverText.innerText = 'Player 2 Wins!';
+          endGame('p2');
+        }
+
+        // — camera follow
+        const behind = f1.clone().normalize().multiplyScalar(-camDistance);
+        const camPos = player.position.clone()
+          .add(behind)
+          .setY(player.position.y + camHeight1);
+        camera1.position.lerp(camPos, 0.1);
+        camera1.lookAt(player.position);
+
+        const behind2 = f2.clone().normalize().multiplyScalar(-camDistance);
+        const camPos2 = player2.position.clone()
+          .add(behind2)
+          .setY(player2.position.y + camHeight2);
+        camera2.position.lerp(camPos2, 0.1);
+        camera2.lookAt(player2.position);
+      }
+      // split-screen render
+      const w = innerWidth, h = innerHeight;
+      renderer.setScissorTest(true);
+      // left: WASD player view (player2)
+      renderer.setViewport(0, 0, w/2, h);
+      renderer.setScissor(0, 0, w/2, h);
+      renderer.render(scene, camera2);
+      // right: arrow-key player view (player1)
+      renderer.setViewport(w/2, 0, w/2, h);
+      renderer.setScissor(w/2, 0, w/2, h);
+      renderer.render(scene, camera1);
+      renderer.setScissorTest(false);
+    }
+
+    // ─── Event hooks & start ──────────────────────────────
+    // initial camera positions
+    camera1.position.set(0, camHeight1, camDistance);
+    camera1.lookAt(player.position);
+    camera2.position.set(0, camHeight2, camDistance);
+    camera2.lookAt(player2.position);
+    // initialize overlays and game state
+    resetGame(false);
+    animate();
+    // overlay button events
+    startBtn.onclick = () => resetGame(true);
+    retryBtn.onclick = () => resetGame(false);
+    settingsGear.onclick = () => {
+      settingsMenu.style.visibility = settingsMenu.style.visibility === 'visible' ? 'hidden' : 'visible';
+    };
+    // settings inputs listeners
+    p1ColorPicker.oninput = () => {
+      p1Color = parseInt(p1ColorPicker.value.slice(1), 16);
+      player.traverse(c => {
+        if (c.isMesh) {
+          c.material.color.set(p1ColorPicker.value);
+          if (c.material.emissive) c.material.emissive.set(p1ColorPicker.value);
+        }
+      });
+    };
+    p2ColorPicker.oninput = () => {
+      p2Color = parseInt(p2ColorPicker.value.slice(1), 16);
+      player2.traverse(c => {
+        if (c.isMesh) {
+          c.material.color.set(p2ColorPicker.value);
+          if (c.material.emissive) c.material.emissive.set(p2ColorPicker.value);
+        }
+      });
+    };
+    p1SpeedSlider.oninput(); // ensure dynamic binding remains
+    p2SpeedSlider.oninput();
+    arenaSizeSlider.oninput = arenaSizeSlider.oninput; // ensure listener stays
+    exitBtn.onclick        = () => window.location.reload();
+    cameraZoomSlider.oninput = () => { camDistance = parseFloat(cameraZoomSlider.value); cameraZoomValue.textContent = cameraZoomSlider.value; };
+    cameraZoomSlider.oninput(); // initialize zoom display
+    
+    // Save Settings applies all current settings and closes menu
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    saveSettingsBtn.onclick = () => {
+      // apply all oninput handlers
+      p1ColorPicker.oninput(); p2ColorPicker.oninput();
+      obsColorPicker.oninput();
+      p1SpeedSlider.oninput(); p2SpeedSlider.oninput();
+      p1JumpHeightSlider.oninput(); p2JumpHeightSlider.oninput();
+      arenaSizeSlider.oninput(); cameraZoomSlider.oninput();
+      bgSelect.onchange();
+      settingsMenu.style.visibility = 'hidden';
+    };
+    // ─── Key Bindings ─────────────────────────────────────
+    const keyBindingsBtn  = document.getElementById('keyBindingsBtn');
+    const keyBindingsOverlay = document.getElementById('keyBindingsOverlay');
+    const keyBindingsModal = document.getElementById('keyBindingsModal');
+    const keyBindingsList = document.getElementById('keyBindingsList');
+    const saveKeyBindingsBtn = document.getElementById('saveKeyBindingsBtn');
+    const keyMapping = {
+      p1Left: 'ArrowLeft', p1Right: 'ArrowRight', p1Jump: 'ArrowUp', p1CamUp: 'KeyO', p1CamDown: 'KeyP',
+      p2Left: 'KeyA',      p2Right: 'KeyD',      p2Jump: 'KeyW',    p2CamUp: 'KeyZ',   p2CamDown: 'KeyX',
+      pause: 'Space',      start: 'Enter'
+    };
+    let listeningFor = null;
+    const actions = [
+      { label:'P1 Left',       key:'p1Left' }, { label:'P1 Right',      key:'p1Right' },
+      { label:'P1 Jump',       key:'p1Jump' }, { label:'P1 Cam Up',     key:'p1CamUp' },
+      { label:'P1 Cam Down',   key:'p1CamDown' },
+      { label:'P2 Left',       key:'p2Left' }, { label:'P2 Right',      key:'p2Right' },
+      { label:'P2 Jump',       key:'p2Jump' }, { label:'P2 Cam Up',     key:'p2CamUp' },
+      { label:'P2 Cam Down',   key:'p2CamDown' },
+      { label:'Pause/Resume',  key:'pause' },  { label:'Start Game',    key:'start' }
+    ];
+    function renderKeyBindings() {
+      keyBindingsList.innerHTML = '';
+      actions.forEach(a => {
+        const row = document.createElement('div');
+        const lbl = document.createElement('span');
+        lbl.textContent = a.label+': ';
+        const btn = document.createElement('button');
+        btn.textContent = keyMapping[a.key];
+        btn.onclick = () => { listeningFor = a.key; btn.textContent = 'Press any key...'; };
+        row.appendChild(lbl);
+        row.appendChild(btn);
+        keyBindingsList.appendChild(row);
+      });
+    }
+    keyBindingsBtn.onclick = () => {
+      keyBindingsOverlay.style.display = 'block';
+      renderKeyBindings();
+    };
+    saveKeyBindingsBtn.onclick = () => {
+      keyBindingsOverlay.style.display = 'none';
+    };
+    // background theme selection
+    const bgSelect = document.getElementById('bgSelect');
+    const textureLoader = new THREE.TextureLoader();
+    const bgFiles = [];
+    for (let i = 1; i <= 23; i++) {
+      bgFiles.push(`bg_ (${i}).jpeg`, `bg_ (${i}).jpg`);
+    }
+    bgFiles.forEach(fn => {
+      const opt = document.createElement('option');
+      opt.value = fn;
+      opt.textContent = fn;
+      bgSelect.appendChild(opt);
+    });
+    bgSelect.onchange = () => {
+      const val = bgSelect.value;
+      if (val === 'none') {
+        document.body.style.backgroundImage = 'none';
+      } else {
+        document.body.style.backgroundImage = `url("assets/${val}")`;
+      }
+    };
+    pauseBtn.onclick = () => { if (gameState==='running') gameState='paused'; };
+    resumeBtn.onclick = () => { if (gameState==='paused') gameState='running'; };
+    restartBtn.onclick = () => resetGame(true);
+  </script>
+</body>
+</html>
