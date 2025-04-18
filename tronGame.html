@@ -435,73 +435,109 @@
       
       // Create collision meshes (invisible)
       const collisionBody = new THREE.Mesh(
-        new THREE.BoxGeometry(1.6, 0.4, 0.8),
+        new THREE.BoxGeometry(0.4, 0.6, 1.8),
         new THREE.MeshBasicMaterial({ visible: false })
       );
       collisionBody.name = 'collisionBody';
       group.add(collisionBody);
 
       const collisionHead = new THREE.Mesh(
-        new THREE.BoxGeometry(0.4, 0.4, 0.4),
+        new THREE.BoxGeometry(0.4, 0.4, 0.3),
         new THREE.MeshBasicMaterial({ visible: false })
       );
-      collisionHead.position.set(0, 0, -0.6); // Position at front of cycle
+      collisionHead.position.set(0, 0, -0.8);
       collisionHead.name = 'collisionHead';
       group.add(collisionHead);
 
-      // glowing neon chassis
-      const bodyGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.6, 32, 1, true);
-      bodyGeo.rotateZ(Math.PI / 2);
+      // Main body - dark metallic frame
+      const bodyGeo = new THREE.BoxGeometry(0.4, 0.3, 1.8);
       const bodyMat = new THREE.MeshStandardMaterial({ 
-        color, 
-        emissive: color, 
-        emissiveIntensity: 0.6, 
-        metalness: 0.5, 
-        roughness: 0.2 
+        color: 0x111111, // Dark base color
+        metalness: 0.9,
+        roughness: 0.3,
+        envMapIntensity: 1.5
       });
       const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.y = 0.15; // Slight lift for wheel clearance
       body.name = 'visualBody';
       group.add(body);
-      
-      // seat and tail extension
-      const seatGeo = new THREE.BoxGeometry(0.3, 0.1, 0.5);
-      const seat = new THREE.Mesh(seatGeo, bodyMat);
-      seat.position.set(0, 0.15, 0);
-      group.add(seat);
-      const tailGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.6, 16);
-      const tail = new THREE.Mesh(tailGeo, bodyMat);
-      tail.rotation.x = Math.PI/2;
-      tail.position.set(0, 0.1, 0.8);
-      group.add(tail);
-      // neon side strips
-      const stripGeo = new THREE.BoxGeometry(0.05, 0.05, 1.6);
-      const stripMat = new THREE.MeshBasicMaterial({ color: color, emissive: color, emissiveIntensity: 1 });
-      ['left','right'].forEach((side, i) => {
-        const strip = new THREE.Mesh(stripGeo, stripMat);
-        strip.position.set((side==='left'? -0.35: 0.35), 0.05, 0);
+
+      // Wheels - larger and touching ground
+      const wheelGeo = new THREE.TorusGeometry(0.4, 0.05, 16, 32); // Bigger radius, thinner profile
+      const wheelMat = new THREE.MeshStandardMaterial({
+        color: color,
+        emissive: color,
+        emissiveIntensity: 0.8,
+        metalness: 0.9,
+        roughness: 0.1
+      });
+
+      // Front wheel
+      const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
+      frontWheel.rotation.y = Math.PI / 2;
+      frontWheel.position.set(0, 0, -0.7);
+      group.add(frontWheel);
+
+      // Back wheel
+      const backWheel = new THREE.Mesh(wheelGeo, wheelMat);
+      backWheel.rotation.y = Math.PI / 2;
+      backWheel.position.set(0, 0, 0.7);
+      group.add(backWheel);
+
+      // Neon effect strips
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: color,
+        emissive: color,
+        emissiveIntensity: 1
+      });
+
+      // Side neon strips
+      [-0.22, 0.22].forEach(x => {
+        const strip = new THREE.Mesh(
+          new THREE.BoxGeometry(0.02, 0.1, 1.6),
+          glowMat
+        );
+        strip.position.set(x, 0.2, 0);
         group.add(strip);
       });
-      // front fork connectors
-      const forkGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8);
-      const forkMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.2 });
-      const fork1 = new THREE.Mesh(forkGeo, forkMat);
-      fork1.position.set(0, 0, -0.4);
-      fork1.rotation.x = Math.PI/2;
-      group.add(fork1);
-      const fork2 = fork1.clone(); fork2.position.set(0, 0.1, -0.4);
-      group.add(fork2);
-      // wheels: front and back
-      const wheelGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.2, 16);
-      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.3 });
-      const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
-      frontWheel.rotation.z = Math.PI / 2;
-      frontWheel.position.set(0, -0.1, -0.8);
-      const backWheel = new THREE.Mesh(wheelGeo, wheelMat);
-      backWheel.rotation.z = Math.PI / 2;
-      backWheel.position.set(0, -0.1, 0.8);
-      group.add(frontWheel, backWheel);
-      // position above ground
-      group.position.y = 0.5;
+
+      // Top neon strip
+      const topStrip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 0.02, 1.6),
+        glowMat
+      );
+      topStrip.position.set(0, 0.31, 0);
+      group.add(topStrip);
+
+      // Front neon accent
+      const frontAccent = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.15, 0.02),
+        glowMat
+      );
+      frontAccent.position.set(0, 0.2, -0.9);
+      group.add(frontAccent);
+
+      // Wheel connection beams (minimal)
+      const beamGeo = new THREE.BoxGeometry(0.1, 0.1, 1.4);
+      const beamMat = new THREE.MeshStandardMaterial({
+        color: 0x222222,
+        metalness: 0.9,
+        roughness: 0.3
+      });
+      const beam = new THREE.Mesh(beamGeo, beamMat);
+      beam.position.y = 0;
+      group.add(beam);
+
+      // Add point lights for neon glow effect
+      [-0.7, 0.7].forEach(z => {
+        const light = new THREE.PointLight(color, 0.5, 1);
+        light.position.set(0, 0.2, z);
+        group.add(light);
+      });
+
+      // Position above ground
+      group.position.y = 0.4; // Lower to ground
+      
       scene.add(group);
       return group;
     }
