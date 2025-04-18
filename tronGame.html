@@ -310,10 +310,12 @@
           cameras[index].position.lerp(camPos, 0.1);
           cameras[index].lookAt(cycle.position);
           
-          // Collision detection
+          // Collision detection (skip while jumping)
           if (!jumping) {
             const collisionResult = detectCollision(cycle, `p${index+1}`);
-            if (collisionResult.collision) handleCollision(index, collisionResult);
+            if (collisionResult.collision) {
+              handleCollision(index, collisionResult);
+            }
           }
         });
         
@@ -333,6 +335,7 @@
       isActive[playerIndex] = false;
       createExplosion(collisionResult.point, defaultColors[playerIndex]);
       
+      // Notify mobile controller if applicable
       if (players[playerIndex].type === 'phone') {
         notifyController(playerIndex, {
           type: 'playerEliminated',
@@ -342,6 +345,7 @@
         });
       }
       
+      // Check for game over conditions
       const activeCount = isActive.filter(active => active).length;
       if (activeCount <= 1) {
         const winnerIndex = isActive.findIndex(active => active);
@@ -785,7 +789,7 @@
       const cycleSize = new THREE.Vector3();
       bodyBox.getSize(cycleSize);
       
-      // Out of bounds check with precise dimensions
+      // 1. End of map collision
       if (Math.abs(cycle.position.x) > half - cycleSize.x/2 || 
           Math.abs(cycle.position.z) > half - cycleSize.z/2) {
         return {
@@ -795,7 +799,7 @@
         };
       }
       
-      // Obstacle collision with separate checks for body and head
+      // 2. Obstacle collision
       for (let obs of obstacles) {
         obs.updateMatrixWorld(true);
         const obsBox = new THREE.Box3().setFromObject(obs);
@@ -809,12 +813,20 @@
         }
       }
       
-      // Trail collision with improved precision
+      // 3. Trail collisions (with different timing for self vs other trails)
       const now = Date.now();
+      const SELF_TRAIL_DELAY = 500; // 500ms delay for self-trail collisions
+      const OTHER_TRAIL_DELAY = 50;  // 50ms delay for other players' trails
+      
       for (let seg of trailSegments) {
-        // Skip segments that are too new or owned by current player
-        if (now - seg.userData.birth < 50) continue;
-        if (seg.userData.owner === owner) continue;
+        const segmentAge = now - seg.userData.birth;
+        const isSelfTrail = seg.userData.owner === owner;
+        
+        // Skip if trail is too new based on owner
+        if ((isSelfTrail && segmentAge < SELF_TRAIL_DELAY) || 
+            (!isSelfTrail && segmentAge < OTHER_TRAIL_DELAY)) {
+          continue;
+        }
         
         seg.updateMatrixWorld(true);
         const segBox = new THREE.Box3().setFromObject(seg);
@@ -825,12 +837,13 @@
             collision: true,
             type: 'trail',
             point: seg.position.clone(),
-            owner: seg.userData.owner
+            owner: seg.userData.owner,
+            isSelfTrail: isSelfTrail
           };
         }
       }
       
-      // Player-to-player collision detection
+      // 4. Player-to-player collision
       for (let i = 0; i < cycles.length; i++) {
         const otherCycle = cycles[i];
         if (!isActive[i] || otherCycle === cycle) continue;
