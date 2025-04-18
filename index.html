@@ -1,135 +1,98 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Tron‑Style Light‑Cycle</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Prismatrix - A multiplayer 3D Prismatrix light cycle game featuring stunning neon graphics and exciting gameplay">
+    <meta name="keywords" content="Prismatrix, light cycle, multiplayer game, 3D game, browser game, WebGL, Three.js">
+    <meta name="author" content="Your Name">
+    <meta property="og:title" content="Prismatrix - Multiplayer Prismatrix Light Cycle Game">
+    <meta property="og:description" content="Experience the thrill of Prismatrix light cycle battles in this stunning 3D multiplayer game">
+    <meta property="og:image" content="assets/preview.png">
+    <meta property="og:url" content="https://yourusername.github.io/prismatrix">
+    
+    <title>Prismatrix - Multiplayer Prismatrix Light Cycle Game</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Share+Tech+Mono&family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <style>
+        .landing-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+            color: #0ff;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .game-title {
+            font-size: 64px;
+            margin-bottom: 30px;
+            text-shadow: 0 0 20px #0ff;
+            animation: glow 2s infinite alternate;
+        }
+        
+        .game-description {
+            max-width: 600px;
+            margin-bottom: 40px;
+            line-height: 1.6;
+            font-size: 18px;
+        }
+        
+        .start-button {
+            background: transparent;
+            color: #0ff;
+            border: 2px solid #0ff;
+            padding: 15px 40px;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            margin: 10px;
+            border-radius: 5px;
+        }
+        
+        .start-button:hover {
+            background: #0ff;
+            color: #000;
+            box-shadow: 0 0 20px #0ff;
+        }
+        
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 20px #0ff;
+            }
+            to {
+                text-shadow: 0 0 30px #0ff, 0 0 40px #0ff;
+            }
+        }
+    </style>
 </head>
 <body>
-<script type="module">
-  import * as THREE                 from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
-  import { OrbitControls }          from 'https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/controls/OrbitControls.js';
-  import { EffectComposer }         from 'https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/postprocessing/EffectComposer.js';
-  import { RenderPass }             from 'https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/postprocessing/RenderPass.js';
-  import { UnrealBloomPass }        from 'https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/postprocessing/UnrealBloomPass.js';
-
-  //--- 1) SCENE & RENDERER ---
-  const scene    = new THREE.Scene();
-  scene.background = new THREE.Color(0x000011);    // pure black‑blue
-
-  const camera   = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 1000);
-  camera.position.set(0, 5, 15);
-  camera.lookAt(0, 1, 0);
-
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(innerWidth, innerHeight);
-  document.body.appendChild(renderer.domElement);
-
-  //--- 2) CONTROLS ---
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-
-  //--- 3) LIGHTING ---
-  // Fill light
-  const hemi = new THREE.HemisphereLight(0x8888ff, 0x000022, 0.4);
-  scene.add(hemi);
-
-  // Key lights
-  const key1 = new THREE.PointLight(0xffffff, 1.2, 50);
-  key1.position.set(10, 10, 10);
-  scene.add(key1);
-
-  const key2 = new THREE.PointLight(0xffffff, 0.8, 50);
-  key2.position.set(-10, 5, -10);
-  scene.add(key2);
-
-  //--- 4) WHEELS ---
-  const wheelGeo = new THREE.TorusGeometry(4, 0.5, 16, 100);
-  const wheelMat = new THREE.MeshStandardMaterial({
-    color: 0x333333,    // light gray so it shows up
-    metalness: 1,
-    roughness: 0.3
-  });
-  [-5, 5].forEach(x => {
-    const w = new THREE.Mesh(wheelGeo, wheelMat);
-    w.rotation.x = Math.PI / 2;
-    w.position.x = x;
-    w.position.y = 1;   // lift up to match body height
-    scene.add(w);
-  });
-
-  //--- 5) BODY ---
-  const side = new THREE.Shape()
-    .moveTo(-5, 0)
-    .lineTo(-2, 3)
-    .bezierCurveTo(0, 4, 3, 4, 5, 3)
-    .lineTo(5, 2)
-    .lineTo(-5, 2)
-    .closePath();
-
-  const extrudeOpts = { depth: 1, bevelEnabled: false };
-  const bodyGeo = new THREE.ExtrudeGeometry(side, extrudeOpts);
-  const bodyMat = new THREE.MeshStandardMaterial({
-    color: 0x222222,    // dark but visible
-    metalness: 0.8,
-    roughness: 0.4,
-    clearcoat: 1,
-    clearcoatRoughness: 0.1
-  });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.rotation.y = Math.PI;
-  body.position.y = 1;
-  scene.add(body);
-
-  //--- 6) NEON STRIPES ---
-  const stripe = new THREE.Shape()
-    .moveTo(-5, 1.9)
-    .lineTo(5, 1.9)
-    .lineTo(5, 1.8)
-    .lineTo(-5, 1.8)
-    .closePath();
-
-  const stripeGeo = new THREE.ExtrudeGeometry(stripe, extrudeOpts);
-  const stripeMat = new THREE.MeshBasicMaterial({
-    color: 0xffff00,
-    emissive: 0xffff00,
-    emissiveIntensity: 2
-  });
-  const stripeMesh = new THREE.Mesh(stripeGeo, stripeMat);
-  stripeMesh.rotation.y = Math.PI;
-  stripeMesh.position.y = 1;
-  scene.add(stripeMesh);
-
-  //--- 7) BLOOM POSTPROCESSING ---
-  const composer = new EffectComposer(renderer);
-  composer.setSize(innerWidth, innerHeight);
-  composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(new UnrealBloomPass(
-    new THREE.Vector2(innerWidth, innerHeight),
-    1.0, // strength
-    0.3, // radius
-    0.9  // threshold
-  ));
-
-  //--- 8) RESIZE HANDLER ---
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    composer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  //--- 9) ANIMATION LOOP ---
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    composer.render();
-  }
-  animate();
-</script>
+    <div class="landing-container">
+        <h1 class="game-title">PRISMATRIX</h1>
+        <p class="game-description">
+            Enter the grid in this modern take on the classic Prismatrix light cycle game. 
+            Challenge your friends in stunning 3D multiplayer battles, leaving behind 
+            neon trails as you compete to be the last rider standing.
+        </p>
+        <div>
+            <a href="playerSetup.html" class="start-button">PLAY NOW</a>
+            <a href="https://github.com/yourusername/prismatrix" target="_blank" class="start-button">GITHUB</a>
+        </div>
+    </div>
 </body>
-</html>
+</html> 
