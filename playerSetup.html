@@ -44,13 +44,15 @@
       margin-right: 10px;
       min-width: 100px;
     }
-    button {
+    select, button {
       background: #000;
       color: #0ff;
       border: 1px solid #0ff;
       padding: 5px 10px;
       margin: 5px;
       font-family: inherit;
+    }
+    button {
       cursor: pointer;
       transition: all 0.3s;
       padding: 10px 20px;
@@ -59,6 +61,25 @@
     button:hover {
       background: #0ff;
       color: #000;
+    }
+    .qr-container {
+      display: none;
+      margin-top: 20px;
+      text-align: center;
+      border-top: 1px solid #0ff;
+      padding-top: 20px;
+    }
+    .qr-code {
+      margin: 10px;
+      padding: 10px;
+      background: #fff;
+      border-radius: 5px;
+      display: inline-block;
+    }
+    .qr-label {
+      display: block;
+      margin-bottom: 5px;
+      color: #0ff;
     }
     .button-container {
       display: flex;
@@ -118,8 +139,9 @@
   <div class="setup-modal">
     <h2>Player Setup</h2>
     <div class="instructions">
-      <p>Select the number of players (2-5):</p>
-      <p>Each player uses keyboard controls with customizable keybindings.</p>
+      <p>Select the number of players (2-5) and their control type:</p>
+      <p>- <strong>Keyboard:</strong> Use keyboard controls</p>
+      <p>- <strong>Phone:</strong> Scan QR code to use phone as controller</p>
     </div>
     <div id="playerRows"></div>
     <div class="button-container">
@@ -127,7 +149,13 @@
       <button id="startGame">Start Game</button>
     </div>
     <div id="countdown" class="countdown"></div>
+    <div id="qrContainer" class="qr-container">
+      <h3>Scan QR Codes for Mobile Players</h3>
+      <p>Open the camera on your phone and scan the QR code below to join the game.</p>
+      <div id="qrCodes"></div>
+    </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <script>
     const players = [];
     const maxPlayers = 5;
@@ -136,55 +164,15 @@
     let countdownInterval;
     let listeningForKey = null;
 
-    // Default keybindings for each player
-    const defaultKeybindings = {
-      p1: {
-        left: 'KeyA',
-        right: 'KeyD',
-        forward: 'KeyW',
-        jump: 'KeyS',
-        camUp: 'KeyQ',
-        camDown: 'KeyE'
-      },
-      p2: {
-        left: 'ArrowLeft',
-        right: 'ArrowRight',
-        forward: 'ArrowUp',
-        jump: 'ArrowDown',
-        camUp: 'Period',
-        camDown: 'Slash'
-      },
-      p3: {
-        left: 'KeyJ',
-        right: 'KeyL',
-        forward: 'KeyI',
-        jump: 'KeyK',
-        camUp: 'KeyU',
-        camDown: 'KeyO'
-      },
-      p4: {
-        left: 'KeyF',
-        right: 'KeyH',
-        forward: 'KeyT',
-        jump: 'KeyG',
-        camUp: 'KeyR',
-        camDown: 'KeyY'
-      },
-      p5: {
-        left: 'Numpad4',
-        right: 'Numpad6',
-        forward: 'Numpad8',
-        jump: 'Numpad5',
-        camUp: 'Numpad7',
-        camDown: 'Numpad9'
-      }
-    };
-
     function createPlayerRow(index) {
       const row = document.createElement('div');
       row.className = 'player-row';
       row.innerHTML = `
-        <label>Player ${index + 1}</label>
+        <label>Player ${index + 1}:</label>
+        <select class="player-type">
+          <option value="keyboard">Keyboard</option>
+          <option value="phone">Phone</option>
+        </select>
         <button class="toggle-keybindings">Customize Keys</button>
       `;
       
@@ -192,31 +180,26 @@
       const keybindings = document.createElement('div');
       keybindings.className = 'keybindings';
       keybindings.id = `keybindings-${index}`;
-      const playerKeys = defaultKeybindings[`p${index + 1}`];
       keybindings.innerHTML = `
         <div class="keybinding-row">
-          <label>Forward:</label>
-          <div class="key-button" data-action="forward" data-player="${index}">${playerKeys.forward}</div>
-        </div>
-        <div class="keybinding-row">
           <label>Left:</label>
-          <div class="key-button" data-action="left" data-player="${index}">${playerKeys.left}</div>
+          <div class="key-button" data-action="left" data-player="${index}">${getDefaultKeymap(index).left}</div>
         </div>
         <div class="keybinding-row">
           <label>Right:</label>
-          <div class="key-button" data-action="right" data-player="${index}">${playerKeys.right}</div>
+          <div class="key-button" data-action="right" data-player="${index}">${getDefaultKeymap(index).right}</div>
         </div>
         <div class="keybinding-row">
           <label>Jump:</label>
-          <div class="key-button" data-action="jump" data-player="${index}">${playerKeys.jump}</div>
+          <div class="key-button" data-action="jump" data-player="${index}">${getDefaultKeymap(index).jump}</div>
         </div>
         <div class="keybinding-row">
           <label>Cam Up:</label>
-          <div class="key-button" data-action="camUp" data-player="${index}">${playerKeys.camUp}</div>
+          <div class="key-button" data-action="camUp" data-player="${index}">${getDefaultKeymap(index).camUp}</div>
         </div>
         <div class="keybinding-row">
           <label>Cam Down:</label>
-          <div class="key-button" data-action="camDown" data-player="${index}">${playerKeys.camDown}</div>
+          <div class="key-button" data-action="camDown" data-player="${index}">${getDefaultKeymap(index).camDown}</div>
         </div>
       `;
       
@@ -284,32 +267,92 @@
     }
 
     document.getElementById('startGame').onclick = () => {
-      const gamePlayers = [];
+      const playerTypes = Array.from(document.getElementsByClassName('player-type'))
+        .map(select => select.value);
       
-      // Create player objects with their keybindings
-      for (let i = 0; i < playerCount; i++) {
-        const keybindings = document.getElementById(`keybindings-${i}`);
-        const keyButtons = keybindings.querySelectorAll('.key-button');
-        const keymap = {};
+      const gamePlayers = playerTypes.map((type, index) => {
+        const player = {
+          id: index + 1,
+          type,
+          keymap: null
+        };
         
-        keyButtons.forEach(button => {
-          const action = button.dataset.action;
-          keymap[action] = button.textContent;
-        });
+        if (type === 'keyboard') {
+          // Get custom keybindings if they exist
+          const keybindings = document.getElementById(`keybindings-${index}`);
+          if (keybindings) {
+            const keyButtons = keybindings.querySelectorAll('.key-button');
+            const keymap = {};
+            keyButtons.forEach(button => {
+              const action = button.dataset.action;
+              keymap[action] = button.textContent;
+            });
+            player.keymap = keymap;
+          } else {
+            player.keymap = getDefaultKeymap(index);
+          }
+        }
         
-        gamePlayers.push({
-          id: i + 1,
-          type: 'keyboard',
-          keymap: keymap
-        });
-      }
+        return player;
+      });
 
       // Store players in localStorage
       localStorage.setItem('prismatrixPlayers', JSON.stringify(gamePlayers));
+
+      // Check if there are any phone players
+      const hasPhonePlayers = gamePlayers.some(player => player.type === 'phone');
       
-      // Start countdown
-      startCountdown(3);
+      if (hasPhonePlayers) {
+        // Generate QR codes for phone players
+        const qrContainer = document.getElementById('qrContainer');
+        const qrCodes = document.getElementById('qrCodes');
+        qrContainer.style.display = 'block';
+        qrCodes.innerHTML = '';
+
+        gamePlayers.forEach(player => {
+          if (player.type === 'phone') {
+            const qrDiv = document.createElement('div');
+            qrDiv.className = 'qr-code';
+            
+            const label = document.createElement('div');
+            label.className = 'qr-label';
+            label.textContent = `Player ${player.id} Controller`;
+            qrDiv.appendChild(label);
+            
+            const canvas = document.createElement('canvas');
+            const controllerUrl = `${window.location.origin}/controller.html?player=${player.id}`;
+            QRCode.toCanvas(canvas, controllerUrl, { 
+              width: 200,
+              margin: 1,
+              color: {
+                dark: '#00ffff',
+                light: '#ffffff'
+              }
+            });
+            qrDiv.appendChild(canvas);
+            
+            qrCodes.appendChild(qrDiv);
+          }
+        });
+        
+        // Start countdown after showing QR codes
+        startCountdown(15);
+      } else {
+        // If all players are keyboard, start immediately
+        startCountdown(3);
+      }
     };
+
+    function getDefaultKeymap(index) {
+      const keymaps = [
+        { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', camUp: 'KeyO', camDown: 'KeyP' },
+        { left: 'KeyA', right: 'KeyD', jump: 'KeyW', camUp: 'KeyZ', camDown: 'KeyX' },
+        { left: 'KeyF', right: 'KeyH', jump: 'KeyT', camUp: 'KeyY', camDown: 'KeyU' },
+        { left: 'KeyJ', right: 'KeyL', jump: 'KeyI', camUp: 'KeyK', camDown: 'KeyM' },
+        { left: 'Numpad4', right: 'Numpad6', jump: 'Numpad8', camUp: 'Numpad7', camDown: 'Numpad9' }
+      ];
+      return keymaps[index];
+    }
 
     // Handle key binding
     document.addEventListener('keydown', (e) => {

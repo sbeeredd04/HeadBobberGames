@@ -22,8 +22,11 @@
     <div id="keyBindingsModal">
       <h2>Key Bindings</h2>
       <div id="keyBindingsList"></div>
-      <button id="saveKeyBindingsBtn">Save</button>
-      <button id="cancelKeyBindingsBtn">Cancel</button>
+      <div class="modal-buttons">
+        <button id="saveKeyBindingsBtn">Save Changes</button>
+        <button id="resetDefaultsBtn">Reset to Defaults</button>
+        <button id="cancelKeyBindingsBtn">Cancel</button>
+      </div>
     </div>
   </div>
   <div id="settingsGear">⚙</div>
@@ -75,55 +78,49 @@
       window.location.href = 'playerSetup.html';
     }
 
-    // Default keybindings
-    const defaultKeybindings = {
-      p1: {
+    // Default keybindings for each player
+    const playerDefaultKeybindings = [
+      { // P1
         left: 'KeyA',
         right: 'KeyD',
-        forward: 'KeyW',
-        jump: 'KeyS',
+        jump: 'KeyW',
         camUp: 'KeyQ',
         camDown: 'KeyE'
       },
-      p2: {
+      { // P2
         left: 'ArrowLeft',
         right: 'ArrowRight',
-        forward: 'ArrowUp',
-        jump: 'ArrowDown',
-        camUp: 'Period',
-        camDown: 'Slash'
+        jump: 'ArrowUp',
+        camUp: 'Slash',
+        camDown: 'Period'
       },
-      p3: {
+      { // P3
         left: 'KeyJ',
         right: 'KeyL',
-        forward: 'KeyI',
-        jump: 'KeyK',
+        jump: 'KeyI',
         camUp: 'KeyU',
         camDown: 'KeyO'
       },
-      p4: {
+      { // P4
         left: 'KeyF',
         right: 'KeyH',
-        forward: 'KeyT',
-        jump: 'KeyG',
+        jump: 'KeyT',
         camUp: 'KeyR',
         camDown: 'KeyY'
       },
-      p5: {
+      { // P5
         left: 'Numpad4',
         right: 'Numpad6',
-        forward: 'Numpad8',
         jump: 'Numpad5',
         camUp: 'Numpad7',
         camDown: 'Numpad9'
       }
-    };
+    ];
 
-    // Ensure each player has keybindings
+    // Ensure each player has correct keybindings
     players.forEach((player, index) => {
       if (player.type === 'keyboard') {
-        const playerNum = `p${index + 1}`;
-        player.keymap = player.keymap || { ...defaultKeybindings[playerNum] };
+        player.keymap = { ...playerDefaultKeybindings[index] };
       }
     });
 
@@ -157,15 +154,18 @@
     const speeds = [];
     const jumpHeights = [];
     const scores = [];
+    const channels = [];
     const isActive = []; // Track if each player is still active
 
     const defaultColors = [0x00ff00, 0xff0000, 0x0000ff, 0xffff00, 0xff00ff];
+    // Starting positions for players - spread out and facing outward
     const spawnPoints = [
-      {x: 0, z: -50, rotation: 0}, // P1 at bottom, facing down
-      {x: 50, z: 0, rotation: Math.PI / 2}, // P2 at right, facing right
-      {x: 0, z: 50, rotation: Math.PI}, // P3 at top, facing up
-      {x: -50, z: 0, rotation: -Math.PI / 2}, // P4 at left, facing left
-      {x: -35, z: -35, rotation: -Math.PI / 4} // P5 at bottom-left, facing bottom-left
+      // For 2-5 players, positioned in a larger circle facing outward
+      {x: -100, z: 0, rotation: 0}, // P1 - Left, facing right
+      {x: 100, z: 0, rotation: Math.PI}, // P2 - Right, facing left
+      {x: 0, z: -100, rotation: Math.PI/2}, // P3 - Top, facing down
+      {x: -70, z: 70, rotation: -Math.PI/4}, // P4 - Top-left, facing bottom-right
+      {x: 70, z: 70, rotation: -3*Math.PI/4} // P5 - Top-right, facing bottom-left
     ];
 
     players.forEach((player, index) => {
@@ -173,7 +173,7 @@
       const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
       cameras.push(camera);
       
-      // Cycle
+      // Cycle with updated starting position and rotation
       const cycle = makeCycle(defaultColors[index]);
       cycle.position.set(spawnPoints[index].x, 0.5, spawnPoints[index].z);
       cycle.rotation.y = spawnPoints[index].rotation;
@@ -186,7 +186,14 @@
       speeds.push(0.7);
       jumpHeights.push(2);
       scores.push(0);
-      isActive.push(true); // All players start active
+      isActive.push(true);
+      
+      // Mobile controller channel
+      if (player.type === 'phone') {
+        const channel = new BroadcastChannel(`prismatrix-${player.id}`);
+        channel.onmessage = e => handleMobileInput(index, e.data);
+        channels.push(channel);
+      }
     });
 
     // Update scoreboard
@@ -195,8 +202,173 @@
       document.getElementById('scoreBoard').textContent = scoreText;
     }
 
-    // Keyboard input handling
+    // Handle mobile input
+    function handleMobileInput(playerIndex, data) {
+      switch(data.action) {
+        case 'move':
+          turns[playerIndex] = Math.sign(data.value);
+          break;
+        case 'jump':
+          if (Date.now() - jumps[playerIndex] > jumpDuration) {
+            jumps[playerIndex] = Date.now();
+          }
+          break;
+        case 'camUp':
+          camHeights[playerIndex] = Math.min(camHeights[playerIndex] + 2, BOX - 10);
+          break;
+        case 'camDown':
+          camHeights[playerIndex] = Math.max(camHeights[playerIndex] - 2, 5);
+          break;
+        case 'left':
+          turns[playerIndex] = 1;
+          break;
+        case 'right':
+          turns[playerIndex] = -1;
+          break;
+      }
+    }
+
+    // Keybindings UI
+    document.getElementById('keyBindingsBtn').onclick = () => {
+      showKeybindingsModal();
+    };
+
+    document.getElementById('cancelKeyBindingsBtn').onclick = () => {
+      hideKeybindingsModal();
+    };
+
+    document.getElementById('saveKeyBindingsBtn').onclick = () => {
+      saveKeybindings();
+      hideKeybindingsModal();
+    };
+
+    function showKeybindingsModal() {
+      const keyBindingsList = document.getElementById('keyBindingsList');
+      keyBindingsList.innerHTML = '';
+      
+      // Create keybinding UI for each keyboard player
+      players.forEach((player, index) => {
+        if (player.type !== 'keyboard') return;
+        
+        const playerDiv = document.createElement('div');
+        playerDiv.className = 'player-keybindings';
+        playerDiv.innerHTML = `
+          <h3>Player ${index + 1} Controls</h3>
+          <div class="keybinding-row">
+            <span>Turn Left</span>
+            <button class="key-button" data-player="${index}" data-action="left">${player.keymap.left}</button>
+          </div>
+          <div class="keybinding-row">
+            <span>Turn Right</span>
+            <button class="key-button" data-player="${index}" data-action="right">${player.keymap.right}</button>
+          </div>
+          <div class="keybinding-row">
+            <span>Jump</span>
+            <button class="key-button" data-player="${index}" data-action="jump">${player.keymap.jump}</button>
+          </div>
+          <div class="keybinding-row">
+            <span>Camera Up</span>
+            <button class="key-button" data-player="${index}" data-action="camUp">${player.keymap.camUp}</button>
+          </div>
+          <div class="keybinding-row">
+            <span>Camera Down</span>
+            <button class="key-button" data-player="${index}" data-action="camDown">${player.keymap.camDown}</button>
+          </div>
+        `;
+        keyBindingsList.appendChild(playerDiv);
+      });
+
+      // Add modal buttons
+      const buttonsDiv = document.createElement('div');
+      buttonsDiv.className = 'modal-buttons';
+      buttonsDiv.innerHTML = `
+        <button id="saveKeyBindingsBtn">Save Changes</button>
+        <button id="resetDefaultsBtn">Reset to Defaults</button>
+        <button id="cancelKeyBindingsBtn">Cancel</button>
+      `;
+      keyBindingsList.appendChild(buttonsDiv);
+      
+      // Add event listeners
+      addKeyBindingListeners();
+      
+      // Show the modal
+      document.getElementById('keyBindingsOverlay').style.display = 'flex';
+    }
+
+    function addKeyBindingListeners() {
+      // Add event listeners to key buttons
+      document.querySelectorAll('.key-button').forEach(button => {
+        button.addEventListener('click', () => {
+          // Remove waiting state from any other buttons
+          document.querySelectorAll('.key-button').forEach(btn => {
+            btn.classList.remove('waiting-for-key');
+            btn.dataset.waiting = 'false';
+          });
+          
+          // Highlight the button to show it's waiting for input
+          button.classList.add('waiting-for-key');
+          button.textContent = 'PRESS ANY KEY';
+          button.dataset.waiting = 'true';
+        });
+      });
+
+      // Add event listeners for modal buttons
+      document.getElementById('saveKeyBindingsBtn').addEventListener('click', () => {
+        saveKeybindings();
+        hideKeybindingsModal();
+      });
+
+      document.getElementById('resetDefaultsBtn').addEventListener('click', () => {
+        players.forEach((player, index) => {
+          if (player.type === 'keyboard') {
+            player.keymap = { ...playerDefaultKeybindings[index] };
+          }
+        });
+        showKeybindingsModal(); // Refresh the modal
+      });
+
+      document.getElementById('cancelKeyBindingsBtn').addEventListener('click', hideKeybindingsModal);
+    }
+
+    function hideKeybindingsModal() {
+      document.getElementById('keyBindingsOverlay').style.display = 'none';
+      
+      // Remove any waiting-for-key state
+      document.querySelectorAll('.key-button').forEach(button => {
+        button.classList.remove('waiting-for-key');
+        button.dataset.waiting = 'false';
+      });
+    }
+
+    function saveKeybindings() {
+      // Save the current keybindings to localStorage
+      localStorage.setItem('prismatrixPlayers', JSON.stringify(players));
+    }
+
+    // Add a global keydown event listener for keybinding changes
     window.addEventListener('keydown', e => {
+      // Check if we're waiting for a key for keybinding
+      const waitingButton = document.querySelector('.key-button[data-waiting="true"]');
+      if (waitingButton) {
+        e.preventDefault();
+        
+        // Get the player and action from the button
+        const playerIndex = parseInt(waitingButton.dataset.player);
+        const action = waitingButton.dataset.action;
+        
+        // Update the keybinding
+        players[playerIndex].keymap[action] = e.code;
+        
+        // Update the button text
+        waitingButton.textContent = e.code;
+        
+        // Remove the waiting state
+        waitingButton.classList.remove('waiting-for-key');
+        waitingButton.dataset.waiting = 'false';
+        
+        return;
+      }
+      
       // Check if this is a start game key press
       if (gameState === 'start' && e.code === 'Enter') {
         document.getElementById('startBtn').onclick();
@@ -217,10 +389,11 @@
       if (gameState !== 'running') return;
       
       players.forEach((player, index) => {
+        if (player.type !== 'keyboard') return;
+        
         // Check if the pressed key matches any of the player's keybindings
         if (e.code === player.keymap.left) turns[index] = 1;
         else if (e.code === player.keymap.right) turns[index] = -1;
-        else if (e.code === player.keymap.forward) speeds[index] = 0.7;
         else if (e.code === player.keymap.jump && Date.now() - jumps[index] > jumpDuration) {
           jumps[index] = Date.now();
         }
@@ -233,8 +406,8 @@
       if (gameState !== 'running') return;
       
       players.forEach((player, index) => {
-        if (e.code === player.keymap.forward) speeds[index] = 0;
-        else if (e.code === player.keymap.left && turns[index] > 0) turns[index] = 0;
+        if (player.type !== 'keyboard') return;
+        if (e.code === player.keymap.left && turns[index] > 0) turns[index] = 0;
         else if (e.code === player.keymap.right && turns[index] < 0) turns[index] = 0;
       });
     });
@@ -259,12 +432,37 @@
     // ─── Light‑cycle factory ─────────────────────────────
     function makeCycle(color) {
       const group = new THREE.Group();
+      
+      // Create collision meshes (invisible)
+      const collisionBody = new THREE.Mesh(
+        new THREE.BoxGeometry(1.6, 0.4, 0.8),
+        new THREE.MeshBasicMaterial({ visible: false })
+      );
+      collisionBody.name = 'collisionBody';
+      group.add(collisionBody);
+
+      const collisionHead = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 0.4, 0.4),
+        new THREE.MeshBasicMaterial({ visible: false })
+      );
+      collisionHead.position.set(0, 0, -0.6); // Position at front of cycle
+      collisionHead.name = 'collisionHead';
+      group.add(collisionHead);
+
       // glowing neon chassis
       const bodyGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.6, 32, 1, true);
       bodyGeo.rotateZ(Math.PI / 2);
-      const bodyMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, metalness: 0.5, roughness: 0.2 });
+      const bodyMat = new THREE.MeshStandardMaterial({ 
+        color, 
+        emissive: color, 
+        emissiveIntensity: 0.6, 
+        metalness: 0.5, 
+        roughness: 0.2 
+      });
       const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.name = 'visualBody';
       group.add(body);
+      
       // seat and tail extension
       const seatGeo = new THREE.BoxGeometry(0.3, 0.1, 0.5);
       const seat = new THREE.Mesh(seatGeo, bodyMat);
@@ -347,46 +545,97 @@
 
     // ─── Collision Detection ─────────────────────────────
     function detectCollision(cycle, owner) {
-      // out of bounds
-      if (Math.abs(cycle.position.x) > half || cycle.position.z > half || cycle.position.z < -half) return true;
+      // Get collision meshes
+      const collisionBody = cycle.getObjectByName('collisionBody');
+      const collisionHead = cycle.getObjectByName('collisionHead');
       
-      // obstacle collision
+      // Update world matrices for accurate bounds
+      cycle.updateMatrixWorld(true);
+      collisionBody.updateMatrixWorld(true);
+      collisionHead.updateMatrixWorld(true);
+      
+      // Create bounding boxes for body and head
+      const bodyBox = new THREE.Box3().setFromObject(collisionBody);
+      const headBox = new THREE.Box3().setFromObject(collisionHead);
+      
+      // Get cycle dimensions for precise boundary checking
+      const cycleSize = new THREE.Vector3();
+      bodyBox.getSize(cycleSize);
+      
+      // Out of bounds check with precise dimensions
+      if (Math.abs(cycle.position.x) > half - cycleSize.x/2 || 
+          Math.abs(cycle.position.z) > half - cycleSize.z/2) {
+        return {
+          collision: true,
+          type: 'boundary',
+          point: cycle.position.clone()
+        };
+      }
+      
+      // Obstacle collision with separate checks for body and head
       for (let obs of obstacles) {
-        // Calculate distance between cycle and obstacle
-        const distance = cycle.position.distanceTo(obs.position);
-        // Check if cycle is close enough to obstacle for collision
-        if (distance < 3) {
-          // More precise collision detection using bounding boxes
-          const cycleBox = new THREE.Box3().setFromObject(cycle);
-          const obsBox = new THREE.Box3().setFromObject(obs);
-          if (cycleBox.intersectsBox(obsBox)) {
-            return true;
-          }
+        obs.updateMatrixWorld(true);
+        const obsBox = new THREE.Box3().setFromObject(obs);
+        
+        if (bodyBox.intersectsBox(obsBox) || headBox.intersectsBox(obsBox)) {
+          return {
+            collision: true,
+            type: 'obstacle',
+            point: obs.position.clone()
+          };
         }
       }
       
-      // trail collision
+      // Trail collision with improved precision
       const now = Date.now();
       for (let seg of trailSegments) {
-        // Skip segments that are too new (just created)
+        // Skip segments that are too new or owned by current player
         if (now - seg.userData.birth < 50) continue;
-        
-        // Skip segments owned by the current player
         if (seg.userData.owner === owner) continue;
         
-        // Calculate distance between cycle and trail segment
-        const distance = cycle.position.distanceTo(seg.position);
-        if (distance < 0.7) {
-          // More precise collision detection using bounding boxes
-          const cycleBox = new THREE.Box3().setFromObject(cycle);
-          const segBox = new THREE.Box3().setFromObject(seg);
-          if (cycleBox.intersectsBox(segBox)) {
-            return true;
-          }
+        seg.updateMatrixWorld(true);
+        const segBox = new THREE.Box3().setFromObject(seg);
+        
+        // Check both body and head collisions with trails
+        if (bodyBox.intersectsBox(segBox) || headBox.intersectsBox(segBox)) {
+          return {
+            collision: true,
+            type: 'trail',
+            point: seg.position.clone(),
+            owner: seg.userData.owner
+          };
         }
       }
       
-      return false;
+      // Player-to-player collision detection
+      for (let i = 0; i < cycles.length; i++) {
+        const otherCycle = cycles[i];
+        if (!isActive[i] || otherCycle === cycle) continue;
+        
+        otherCycle.updateMatrixWorld(true);
+        const otherBody = otherCycle.getObjectByName('collisionBody');
+        const otherHead = otherCycle.getObjectByName('collisionHead');
+        
+        if (!otherBody || !otherHead) continue;
+        
+        const otherBodyBox = new THREE.Box3().setFromObject(otherBody);
+        const otherHeadBox = new THREE.Box3().setFromObject(otherHead);
+        
+        // Check all possible collision combinations
+        if (bodyBox.intersectsBox(otherBodyBox) || 
+            bodyBox.intersectsBox(otherHeadBox) || 
+            headBox.intersectsBox(otherBodyBox) || 
+            headBox.intersectsBox(otherHeadBox)) {
+          return {
+            collision: true,
+            type: 'player',
+            point: otherCycle.position.clone(),
+            otherPlayer: i + 1
+          };
+        }
+      }
+      
+      return { collision: false };
     }
 
     // ─── Animation loop ──────────────────────────────────
@@ -414,7 +663,7 @@
           const oldPos = cycle.position.clone();
           cycle.position.add(forward);
           
-          // Create trail segment for all movement, not just turns
+          // Create trail segment for all movement
           makeSegment(oldPos, cycle.position, defaultColors[index], `p${index+1}`);
           
           // Camera follow
@@ -427,14 +676,27 @@
           
           // Collision detection
           if (!jumping) {
-            if (detectCollision(cycle, `p${index+1}`)) {
+            const collisionResult = detectCollision(cycle, `p${index+1}`);
+            if (collisionResult.collision) {
               // Eliminate this player
               isActive[index] = false;
+              
+              // Create explosion effect at collision point
+              createExplosion(collisionResult.point, defaultColors[index]);
+              
+              // Notify the eliminated player
+              if (player.type === 'phone') {
+                notifyController(index, {
+                  type: 'playerEliminated',
+                  playerId: index + 1,
+                  collisionType: collisionResult.type,
+                  otherPlayer: collisionResult.otherPlayer
+                });
+              }
               
               // Check if only one player remains
               const activeCount = isActive.filter(active => active).length;
               if (activeCount <= 1) {
-                // Game over - find the winner
                 const winnerIndex = isActive.findIndex(active => active);
                 if (winnerIndex !== -1) {
                   scores[winnerIndex]++;
@@ -442,19 +704,17 @@
                   gameOverText.innerText = `Player ${winnerIndex + 1} Wins!`;
                   endGame(`p${winnerIndex + 1}`);
                 } else {
-                  // No winner (shouldn't happen)
                   gameOverText.innerText = "Game Over - No Winner";
                   endGame(null);
                 }
               } else {
-                // Update scoreboard to show eliminated players
                 updateScoreboard();
               }
             }
           }
         });
         
-        // Clean up old trail segments based on trail duration setting
+        // Clean up old trail segments
         for (let i = trailSegments.length - 1; i >= 0; i--) {
           const seg = trailSegments[i];
           if (now - seg.userData.birth > trailDuration) {
@@ -464,7 +724,7 @@
         }
       }
       
-      // Render each viewport
+      // Render viewports
       renderer.setScissorTest(true);
       layouts[players.length].forEach((vp, idx) => {
         const Cx = innerWidth * vp.x;
@@ -476,6 +736,69 @@
         renderer.render(scene, cameras[idx]);
       });
       renderer.setScissorTest(false);
+    }
+
+    // Add explosion effect function
+    function createExplosion(position, color) {
+      const particleCount = 50;
+      const geometry = new THREE.BufferGeometry();
+      const positions = [];
+      const velocities = [];
+      
+      for (let i = 0; i < particleCount; i++) {
+        positions.push(
+          position.x + (Math.random() - 0.5) * 0.5,
+          position.y + (Math.random() - 0.5) * 0.5,
+          position.z + (Math.random() - 0.5) * 0.5
+        );
+        
+        velocities.push(
+          (Math.random() - 0.5) * 0.2,
+          Math.random() * 0.2,
+          (Math.random() - 0.5) * 0.2
+        );
+      }
+      
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      
+      const material = new THREE.PointsMaterial({
+        color: color,
+        size: 0.2,
+        transparent: true,
+        opacity: 1
+      });
+      
+      const particles = new THREE.Points(geometry, material);
+      scene.add(particles);
+      
+      // Animate explosion
+      const startTime = Date.now();
+      const duration = 1000; // 1 second
+      
+      function animateExplosion() {
+        const positions = particles.geometry.attributes.position.array;
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+        
+        if (progress >= 1) {
+          scene.remove(particles);
+          return;
+        }
+        
+        for (let i = 0; i < particleCount; i++) {
+          const i3 = i * 3;
+          positions[i3] += velocities[i3] * (1 - progress);
+          positions[i3 + 1] += velocities[i3 + 1] * (1 - progress);
+          positions[i3 + 2] += velocities[i3 + 2] * (1 - progress);
+        }
+        
+        particles.geometry.attributes.position.needsUpdate = true;
+        material.opacity = 1 - progress;
+        
+        requestAnimationFrame(animateExplosion);
+      }
+      
+      animateExplosion();
     }
 
     // Create dynamic player settings UI
@@ -577,6 +900,12 @@
     document.getElementById('startBtn').onclick = () => {
       document.getElementById('startOverlay').style.display = 'none';
       gameState = 'running';
+      
+      // Notify all controllers about game state change
+      notifyControllers({
+        type: 'gameStatus',
+        gameState: gameState
+      });
     };
 
     // Game over
@@ -585,14 +914,12 @@
       gameState = 'gameover';
       document.getElementById('gameOverOverlay').style.display = 'flex';
       
-      if (winner) {
-        const winnerIndex = parseInt(winner.replace('p', '')) - 1;
-        scores[winnerIndex]++;
-        updateScoreboard();
-        document.getElementById('gameOverText').innerText = `Player ${winnerIndex + 1} Wins!`;
-      } else {
-        document.getElementById('gameOverText').innerText = "Game Over - No Winner";
-      }
+      // Notify all controllers about game over
+      notifyControllers({
+        type: 'gameStatus',
+        gameState: gameState,
+        winner: winner ? winner.replace('p', '') : null
+      });
     }
 
     // Retry
@@ -604,12 +931,24 @@
     document.getElementById('pauseBtn').onclick = () => {
       if (gameState === 'running') {
         gameState = 'paused';
+        
+        // Notify all controllers about game state change
+        notifyControllers({
+          type: 'gameStatus',
+          gameState: gameState
+        });
       }
     };
 
     document.getElementById('resumeBtn').onclick = () => {
       if (gameState === 'paused') {
         gameState = 'running';
+        
+        // Notify all controllers about game state change
+        notifyControllers({
+          type: 'gameStatus',
+          gameState: gameState
+        });
       }
     };
 
@@ -701,110 +1040,211 @@
     // Start animation
     animate();
 
-    // Update CSS for keybindings modal
+    // Function to notify all controllers about game state changes
+    function notifyControllers(message) {
+      players.forEach((player, index) => {
+        if (player.type === 'phone') {
+          notifyController(index, message);
+        }
+      });
+    }
+    
+    // Function to notify a specific controller
+    function notifyController(playerIndex, message) {
+      if (channels[playerIndex]) {
+        channels[playerIndex].postMessage(message);
+      }
+    }
+
+    // Add CSS for settings and keybindings
     const style = document.createElement('style');
     style.textContent = `
+      #settingsMenu {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.9);
+        border: 2px solid #0ff;
+        border-radius: 10px;
+        padding: 20px;
+        color: #0ff;
+        z-index: 900;
+        max-height: 80vh;
+        overflow-y: auto;
+        width: 80%;
+        max-width: 600px;
+      }
+
       #keyBindingsOverlay {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.95);
         display: none;
         justify-content: center;
         align-items: center;
-        z-index: 10000;
+        z-index: 1000;
+        font-family: 'Share Tech Mono', monospace;
       }
       
       #keyBindingsModal {
-        background: #111;
+        background: #000;
         border: 2px solid #0ff;
-        border-radius: 10px;
-        padding: 20px;
-        max-width: 500px;
+        border-radius: 15px;
+        padding: 30px;
+        max-width: 800px;
         width: 90%;
-        max-height: 80vh;
+        max-height: 85vh;
         overflow-y: auto;
         color: #0ff;
-        box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-        position: relative;
-        z-index: 10001;
-      }
-      
-      #settingsMenu {
-        z-index: 9999;
+        box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
       }
       
       #keyBindingsModal h2 {
         text-align: center;
-        margin-top: 0;
+        margin: 0 0 20px 0;
         color: #0ff;
         text-shadow: 0 0 10px #0ff;
+        font-size: 24px;
       }
       
       .player-keybindings {
-        margin-bottom: 20px;
-        padding: 10px;
+        margin-bottom: 25px;
+        padding: 20px;
         border: 1px solid #0ff;
-        border-radius: 5px;
+        border-radius: 10px;
+        background: rgba(0, 255, 255, 0.05);
+        box-shadow: 0 0 15px rgba(0, 255, 255, 0.1) inset;
       }
       
       .player-keybindings h3 {
-        margin-top: 0;
+        margin: 0 0 15px 0;
         color: #0ff;
+        text-shadow: 0 0 5px #0ff;
+        font-size: 20px;
+        border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+        padding-bottom: 10px;
       }
       
       .keybinding-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin: 10px 0;
+        margin: 12px 0;
+        padding: 8px 15px;
+        background: rgba(0, 0, 0, 0.4);
+        border-radius: 8px;
+        border: 1px solid rgba(0, 255, 255, 0.1);
+      }
+      
+      .keybinding-row span {
+        font-size: 16px;
+        color: rgba(0, 255, 255, 0.9);
       }
       
       .key-button {
-        background: rgba(0, 255, 255, 0.2);
+        background: rgba(0, 255, 255, 0.1);
         border: 1px solid #0ff;
         color: #0ff;
-        padding: 5px 10px;
-        border-radius: 5px;
+        padding: 8px 20px;
+        border-radius: 8px;
         cursor: pointer;
-        min-width: 100px;
+        min-width: 140px;
         text-align: center;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
       }
       
       .key-button:hover {
-        background: rgba(0, 255, 255, 0.3);
+        background: rgba(0, 255, 255, 0.2);
+        box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
       }
       
       .key-button.waiting-for-key {
-        background: rgba(255, 255, 0, 0.3);
+        background: rgba(255, 255, 0, 0.2);
         border-color: #ff0;
         color: #ff0;
         animation: pulse 1s infinite;
       }
       
       @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
+        0% { opacity: 1; box-shadow: 0 0 15px rgba(255, 255, 0, 0.3); }
+        50% { opacity: 0.5; box-shadow: 0 0 25px rgba(255, 255, 0, 0.5); }
+        100% { opacity: 1; box-shadow: 0 0 15px rgba(255, 255, 0, 0.3); }
       }
       
-      #keyBindingsModal button {
-        background: rgba(0, 255, 255, 0.2);
-        border: 1px solid #0ff;
+      .modal-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 25px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(0, 255, 255, 0.3);
+      }
+      
+      .modal-buttons button {
+        background: rgba(0, 255, 255, 0.1);
+        border: 2px solid #0ff;
         color: #0ff;
-        padding: 8px 15px;
-        border-radius: 5px;
+        padding: 12px 25px;
+        border-radius: 8px;
         cursor: pointer;
-        margin: 10px 5px;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        min-width: 150px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
       
-      #keyBindingsModal button:hover {
+      .modal-buttons button:hover {
+        background: rgba(0, 255, 255, 0.2);
+        box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+        transform: translateY(-2px);
+      }
+      
+      #saveKeyBindingsBtn {
+        background: rgba(0, 255, 255, 0.2);
+      }
+      
+      #resetDefaultsBtn {
+        background: rgba(255, 165, 0, 0.1);
+        border-color: #ffa500;
+        color: #ffa500;
+      }
+      
+      #cancelKeyBindingsBtn {
+        background: rgba(255, 0, 0, 0.1);
+        border-color: #f00;
+        color: #f00;
+      }
+      
+      /* Scrollbar styling */
+      #keyBindingsModal::-webkit-scrollbar {
+        width: 10px;
+      }
+      
+      #keyBindingsModal::-webkit-scrollbar-track {
+        background: rgba(0, 255, 255, 0.1);
+        border-radius: 5px;
+      }
+      
+      #keyBindingsModal::-webkit-scrollbar-thumb {
         background: rgba(0, 255, 255, 0.3);
+        border-radius: 5px;
+        border: 1px solid rgba(0, 255, 255, 0.5);
+      }
+      
+      #keyBindingsModal::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 255, 255, 0.4);
       }
     `;
     document.head.appendChild(style);
   </script>
 </body>
 </html>
+``` 
+``` 
