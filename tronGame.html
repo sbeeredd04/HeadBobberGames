@@ -635,7 +635,7 @@
       
       // Create collision meshes (invisible)
       const collisionBody = new THREE.Mesh(
-        new THREE.BoxGeometry(1.6, 4.0, 5.5), // Increased length and width
+        new THREE.BoxGeometry(1, 4.0, 2), // Increased length and width
         new THREE.MeshBasicMaterial({ visible: false })
       );
       collisionBody.name = 'collisionBody';
@@ -657,7 +657,8 @@
         roughness: 0.05,
         clearcoat: 1.0,
         clearcoatRoughness: 0.05,
-        reflectivity: 1.0
+        reflectivity: 1.0,
+        name: 'bodyMaterial'
       });
       const body = new THREE.Mesh(bodyGeo, bodyMat);
       body.position.y = 2.0;
@@ -667,6 +668,16 @@
       // Wheels - layered design with multiple rings
       const wheelRadius = 2.0;
       const wheelThickness = 0.4; // Increased thickness
+
+      const wheelMat = new THREE.MeshPhysicalMaterial({
+        color: 0x000000,
+        metalness: 1.0,
+        roughness: 0.05,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.05,
+        reflectivity: 1.0,
+        name: 'wheelMaterial'
+      });
 
       // Create layered wheel function
       function createLayeredWheel(position) {
@@ -684,7 +695,8 @@
           metalness: 0.9,
           roughness: 0.1,
           emissive: color,
-          emissiveIntensity: 0.5
+          emissiveIntensity: 0.5,
+          name: 'neonMaterial'
         }));
         wheelGroup.add(middleWheel);
 
@@ -701,7 +713,8 @@
             emissive: color,
             emissiveIntensity: 1.5,
             transparent: true,
-            opacity: 0.9
+            opacity: 0.9,
+            name: 'neonMaterial'
           }));
           wheelGroup.add(ring);
         });
@@ -710,15 +723,6 @@
         wheelGroup.position.copy(position);
         return wheelGroup;
       }
-
-      const wheelMat = new THREE.MeshPhysicalMaterial({
-        color: 0x000000,
-        metalness: 1.0,
-        roughness: 0.05,
-        clearcoat: 1.0,
-        clearcoatRoughness: 0.05,
-        reflectivity: 1.0
-      });
 
       // Add front and back wheels - increased spacing
       group.add(createLayeredWheel(new THREE.Vector3(0, 2.0, -2.5)));
@@ -730,7 +734,8 @@
         emissive: color,
         emissiveIntensity: 1.5,
         transparent: true,
-        opacity: 0.9
+        opacity: 0.9,
+        name: 'neonMaterial'
       });
 
       // Body neon strips - multiple layers on sides
@@ -790,17 +795,17 @@
     // Enhanced trail segment creation
     function makeSegment(start, end, color, owner) {
       const length = start.distanceTo(end);
-      const trailHeight = 6.0; // Increased trail height to match wheel diameter + extra
+      const trailHeight = 4.0; // Match wheel height
       
       // Create main trail body - more translucent
       const trailMat = new THREE.MeshPhysicalMaterial({
         color: color,
         transparent: true,
-        opacity: 0.6, // Increased opacity as requested
+        opacity: 0.15, // Much more transparent
         metalness: 0.9,
         roughness: 0.2,
         emissive: color,
-        emissiveIntensity: 0.4
+        emissiveIntensity: 0.2
       });
 
       // Create edge material - fully opaque with strong glow
@@ -814,21 +819,21 @@
 
       // Main trail body - taller and thinner
       const mainTrail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, trailHeight, length),
+        new THREE.BoxGeometry(0.15, trailHeight, length), // Thinner main trail
         trailMat
       );
 
       // Edge strips - fully opaque with increased thickness
-      const edgeGeo = new THREE.BoxGeometry(0.08, trailHeight, length);
+      const edgeGeo = new THREE.BoxGeometry(0.03, trailHeight, length); // Thinner edges
       const leftEdge = new THREE.Mesh(edgeGeo, edgeMat);
       const rightEdge = new THREE.Mesh(edgeGeo, edgeMat);
       
-      // Position edges
-      leftEdge.position.x = -0.15;
-      rightEdge.position.x = 0.15;
+      // Position edges closer together
+      leftEdge.position.x = -0.075;
+      rightEdge.position.x = 0.075;
 
       // Add horizontal edges at top and bottom
-      const horizontalEdgeGeo = new THREE.BoxGeometry(0.3, 0.08, length);
+      const horizontalEdgeGeo = new THREE.BoxGeometry(0.15, 0.03, length);
       const topEdge = new THREE.Mesh(horizontalEdgeGeo, edgeMat);
       const bottomEdge = new THREE.Mesh(horizontalEdgeGeo, edgeMat);
       
@@ -918,12 +923,16 @@
         }
       }
       
-      // Trail collision with improved precision
+      // Trail collision with improved precision and self-trail delay
       const now = Date.now();
       for (let seg of trailSegments) {
-        // Skip segments that are too new or owned by current player
-        if (now - seg.userData.birth < 50) continue;
-        if (seg.userData.owner === owner) continue;
+        // For own trail, only check collisions after 1 second
+        if (seg.userData.owner === owner) {
+          if (now - seg.userData.birth < 1000) continue; // Skip if trail is less than 1 second old
+        } else {
+          // For other players' trails, keep a small delay to prevent immediate collisions
+          if (now - seg.userData.birth < 50) continue;
+        }
         
         seg.updateMatrixWorld(true);
         const segBox = new THREE.Box3().setFromObject(seg);
@@ -1091,12 +1100,43 @@
         
         colorPicker.oninput = () => {
           const color = parseInt(colorPicker.value.slice(1), 16);
-          cycles[index].traverse(c => {
-            if (c.isMesh) {
-              c.material.color.set(colorPicker.value);
-              if (c.material.emissive) c.material.emissive.set(colorPicker.value);
+          
+          // Clear existing trails for this player
+          const playerTrails = trailSegments.filter(seg => seg.userData.owner === `p${index+1}`);
+          playerTrails.forEach(trail => {
+            scene.remove(trail);
+            const trailIndex = trailSegments.indexOf(trail);
+            if (trailIndex > -1) {
+              trailSegments.splice(trailIndex, 1);
             }
           });
+
+          // Update bike colors
+          cycles[index].traverse(c => {
+            if (c.isMesh && c.material) {
+              // Only change materials specifically marked as neon
+              if (c.material.name === 'neonMaterial') {
+                c.material.color.set(colorPicker.value);
+                if (c.material.emissive) {
+                  c.material.emissive.set(colorPicker.value);
+                }
+              }
+              // Ensure black materials stay black
+              if (c.material.name === 'bodyMaterial' || c.material.name === 'wheelMaterial') {
+                c.material.color.setHex(0x000000);
+                if (c.material.emissive) {
+                  c.material.emissive.setHex(0x000000);
+                }
+              }
+            }
+            // Update point lights
+            if (c.isPointLight) {
+              c.color.set(colorPicker.value);
+            }
+          });
+
+          // Update default colors array for new trails
+          defaultColors[index] = color;
         };
         
         speedSlider.oninput = () => {
@@ -1148,6 +1188,13 @@
 
     // Save settings
     document.getElementById('saveSettingsBtn').onclick = () => {
+      // Clear all existing trails when settings are saved
+      trailSegments.forEach(trail => {
+        scene.remove(trail);
+      });
+      trailSegments.length = 0; // Clear the array
+      
+      // Hide settings menu
       document.getElementById('settingsMenu').style.display = 'none';
     };
 
