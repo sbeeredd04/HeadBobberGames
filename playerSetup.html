@@ -168,7 +168,7 @@
         return;
       }
 
-      // Store player data in the format expected by tronGame.html
+      // Store player data in the format expected by prismatrix.html
       localStorage.setItem('prismatrixPlayers', JSON.stringify(playerData));
       
       // Show loading screen before transition
@@ -176,7 +176,7 @@
       loadingScreen.style.opacity = '1';
       
       setTimeout(() => {
-        window.location.href = 'tronGame.html';
+        window.location.href = 'prismatrix.html';
       }, 2000);
     });
 
