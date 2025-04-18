@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Player Setup - Prismatrix</title>
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Share+Tech+Mono&family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Pixelify Sans', sans-serif;
+      background: #000;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .setup-modal {
+      background: rgba(0,0,0,0.9);
+      border: 2px solid #0ff;
+      border-radius: 10px;
+      padding: 20px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 0 20px rgba(0,255,255,0.5);
+    }
+    h2 {
+      text-align: center;
+      color: #0ff;
+      text-shadow: 0 0 10px #0ff;
+      margin-bottom: 20px;
+    }
+    .player-row {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+      padding: 10px;
+      border: 1px solid #0ff;
+      border-radius: 5px;
+      background: rgba(0,255,255,0.1);
+    }
+    .player-row label {
+      margin-right: 10px;
+      min-width: 100px;
+    }
+    button {
+      background: #000;
+      color: #0ff;
+      border: 1px solid #0ff;
+      padding: 5px 10px;
+      margin: 5px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.3s;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #0ff;
+      color: #000;
+    }
+    .button-container {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+    .countdown {
+      text-align: center;
+      font-size: 24px;
+      margin-top: 20px;
+      color: #0ff;
+      text-shadow: 0 0 10px #0ff;
+    }
+    .instructions {
+      margin-bottom: 20px;
+      padding: 10px;
+      border: 1px solid #0ff;
+      border-radius: 5px;
+      background: rgba(0,255,255,0.1);
+    }
+    .keybindings {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #0ff;
+      border-radius: 5px;
+      background: rgba(0,255,255,0.05);
+    }
+    .keybinding-row {
+      display: flex;
+      align-items: center;
+      margin: 5px 0;
+    }
+    .keybinding-row label {
+      min-width: 80px;
+    }
+    .key-button {
+      min-width: 100px;
+      text-align: center;
+      background: rgba(0,255,255,0.2);
+      border: 1px solid #0ff;
+      border-radius: 5px;
+      padding: 5px;
+      cursor: pointer;
+    }
+    .key-button.listening {
+      background: #0ff;
+      color: #000;
+    }
+    .toggle-keybindings {
+      margin-left: 10px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="setup-modal">
+    <h2>Player Setup</h2>
+    <div class="instructions">
+      <p>Select the number of players (2-5):</p>
+      <p>Each player uses keyboard controls with customizable keybindings.</p>
+    </div>
+    <div id="playerRows"></div>
+    <div class="button-container">
+      <button id="addPlayer">Add Player</button>
+      <button id="startGame">Start Game</button>
+    </div>
+    <div id="countdown" class="countdown"></div>
+  </div>
+  <script>
+    const players = [];
+    const maxPlayers = 5;
+    const minPlayers = 2;
+    let playerCount = 2;
+    let countdownInterval;
+    let listeningForKey = null;
+
+    // Default keybindings for each player
+    const defaultKeybindings = {
+      p1: {
+        left: 'KeyA',
+        right: 'KeyD',
+        forward: 'KeyW',
+        jump: 'KeyS',
+        camUp: 'KeyQ',
+        camDown: 'KeyE'
+      },
+      p2: {
+        left: 'ArrowLeft',
+        right: 'ArrowRight',
+        forward: 'ArrowUp',
+        jump: 'ArrowDown',
+        camUp: 'Period',
+        camDown: 'Slash'
+      },
+      p3: {
+        left: 'KeyJ',
+        right: 'KeyL',
+        forward: 'KeyI',
+        jump: 'KeyK',
+        camUp: 'KeyU',
+        camDown: 'KeyO'
+      },
+      p4: {
+        left: 'KeyF',
+        right: 'KeyH',
+        forward: 'KeyT',
+        jump: 'KeyG',
+        camUp: 'KeyR',
+        camDown: 'KeyY'
+      },
+      p5: {
+        left: 'Numpad4',
+        right: 'Numpad6',
+        forward: 'Numpad8',
+        jump: 'Numpad5',
+        camUp: 'Numpad7',
+        camDown: 'Numpad9'
+      }
+    };
+
+    function createPlayerRow(index) {
+      const row = document.createElement('div');
+      row.className = 'player-row';
+      row.innerHTML = `
+        <label>Player ${index + 1}</label>
+        <button class="toggle-keybindings">Customize Keys</button>
+      `;
+      
+      // Add keybindings section
+      const keybindings = document.createElement('div');
+      keybindings.className = 'keybindings';
+      keybindings.id = `keybindings-${index}`;
+      const playerKeys = defaultKeybindings[`p${index + 1}`];
+      keybindings.innerHTML = `
+        <div class="keybinding-row">
+          <label>Forward:</label>
+          <div class="key-button" data-action="forward" data-player="${index}">${playerKeys.forward}</div>
+        </div>
+        <div class="keybinding-row">
+          <label>Left:</label>
+          <div class="key-button" data-action="left" data-player="${index}">${playerKeys.left}</div>
+        </div>
+        <div class="keybinding-row">
+          <label>Right:</label>
+          <div class="key-button" data-action="right" data-player="${index}">${playerKeys.right}</div>
+        </div>
+        <div class="keybinding-row">
+          <label>Jump:</label>
+          <div class="key-button" data-action="jump" data-player="${index}">${playerKeys.jump}</div>
+        </div>
+        <div class="keybinding-row">
+          <label>Cam Up:</label>
+          <div class="key-button" data-action="camUp" data-player="${index}">${playerKeys.camUp}</div>
+        </div>
+        <div class="keybinding-row">
+          <label>Cam Down:</label>
+          <div class="key-button" data-action="camDown" data-player="${index}">${playerKeys.camDown}</div>
+        </div>
+      `;
+      
+      row.appendChild(keybindings);
+      
+      // Add event listener for the customize keys button
+      const customizeBtn = row.querySelector('.toggle-keybindings');
+      customizeBtn.addEventListener('click', () => {
+        const keybindings = row.querySelector('.keybindings');
+        if (keybindings.style.display === 'block') {
+          keybindings.style.display = 'none';
+          customizeBtn.textContent = 'Customize Keys';
+        } else {
+          keybindings.style.display = 'block';
+          customizeBtn.textContent = 'Hide Keys';
+        }
+      });
+      
+      // Add event listeners for key buttons
+      const keyButtons = keybindings.querySelectorAll('.key-button');
+      keyButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          if (listeningForKey) {
+            listeningForKey.classList.remove('listening');
+          }
+          button.classList.add('listening');
+          listeningForKey = button;
+        });
+      });
+      
+      return row;
+    }
+
+    function updatePlayerRows() {
+      const container = document.getElementById('playerRows');
+      container.innerHTML = '';
+      for (let i = 0; i < playerCount; i++) {
+        container.appendChild(createPlayerRow(i));
+      }
+    }
+
+    document.getElementById('addPlayer').onclick = () => {
+      if (playerCount < maxPlayers) {
+        playerCount++;
+        updatePlayerRows();
+      }
+    };
+
+    function startCountdown(seconds) {
+      const countdownElement = document.getElementById('countdown');
+      countdownElement.style.display = 'block';
+      
+      let remainingSeconds = seconds;
+      countdownElement.textContent = `Game starting in ${remainingSeconds} seconds...`;
+      
+      countdownInterval = setInterval(() => {
+        remainingSeconds--;
+        if (remainingSeconds <= 0) {
+          clearInterval(countdownInterval);
+          window.location.href = 'tronGame.html';
+        } else {
+          countdownElement.textContent = `Game starting in ${remainingSeconds} seconds...`;
+        }
+      }, 1000);
+    }
+
+    document.getElementById('startGame').onclick = () => {
+      const gamePlayers = [];
+      
+      // Create player objects with their keybindings
+      for (let i = 0; i < playerCount; i++) {
+        const keybindings = document.getElementById(`keybindings-${i}`);
+        const keyButtons = keybindings.querySelectorAll('.key-button');
+        const keymap = {};
+        
+        keyButtons.forEach(button => {
+          const action = button.dataset.action;
+          keymap[action] = button.textContent;
+        });
+        
+        gamePlayers.push({
+          id: i + 1,
+          type: 'keyboard',
+          keymap: keymap
+        });
+      }
+
+      // Store players in localStorage
+      localStorage.setItem('prismatrixPlayers', JSON.stringify(gamePlayers));
+      
+      // Start countdown
+      startCountdown(3);
+    };
+
+    // Handle key binding
+    document.addEventListener('keydown', (e) => {
+      if (listeningForKey) {
+        e.preventDefault();
+        listeningForKey.textContent = e.code;
+        listeningForKey.classList.remove('listening');
+        listeningForKey = null;
+      }
+    });
+
+    // Initialize
+    updatePlayerRows();
+  </script>
+</body>
+</html> 

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Prismatrix Controller</title>
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Share+Tech+Mono&family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Pixelify Sans', sans-serif;
+      background: #000;
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      touch-action: none;
+    }
+    .controller {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .player-info {
+      text-align: center;
+      color: #0ff;
+      text-shadow: 0 0 10px #0ff;
+      margin-bottom: 20px;
+    }
+    .controls {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-grow: 1;
+    }
+    .dpad {
+      width: 150px;
+      height: 150px;
+      position: relative;
+    }
+    .dpad-button {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      background: rgba(0, 255, 255, 0.2);
+      border: 2px solid #0ff;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0ff;
+      font-size: 24px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .dpad-button:active {
+      background: rgba(0, 255, 255, 0.4);
+    }
+    .dpad-up { top: 0; left: 50px; }
+    .dpad-down { bottom: 0; left: 50px; }
+    .dpad-left { left: 0; top: 50px; }
+    .dpad-right { right: 0; top: 50px; }
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .action-button {
+      width: 80px;
+      height: 80px;
+      background: rgba(0, 255, 255, 0.2);
+      border: 2px solid #0ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0ff;
+      font-size: 20px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .action-button:active {
+      background: rgba(0, 255, 255, 0.4);
+    }
+    .status {
+      text-align: center;
+      color: #0ff;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+    .connection-status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: #ff0000;
+    }
+    .connection-status.connected {
+      background: #00ff00;
+    }
+    .instructions {
+      text-align: center;
+      color: #0ff;
+      margin-top: 20px;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+    .game-status {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 5px 10px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid #0ff;
+      border-radius: 5px;
+      font-size: 12px;
+      color: #0ff;
+    }
+    .eliminated {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .eliminated .dpad-button,
+    .eliminated .action-button {
+      opacity: 0.3;
+    }
+  </style>
+</head>
+<body>
+  <div class="controller">
+    <div class="player-info">
+      <h2>Player <span id="playerNumber">1</span> Controller</h2>
+    </div>
+    <div class="controls">
+      <div class="dpad">
+        <div class="dpad-button dpad-up" data-action="up">↑</div>
+        <div class="dpad-button dpad-down" data-action="down">↓</div>
+        <div class="dpad-button dpad-left" data-action="left">←</div>
+        <div class="dpad-button dpad-right" data-action="right">→</div>
+      </div>
+      <div class="action-buttons">
+        <div class="action-button" data-action="jump">JUMP</div>
+        <div class="action-button" data-action="camUp">CAM ↑</div>
+        <div class="action-button" data-action="camDown">CAM ↓</div>
+      </div>
+    </div>
+    <div class="status" id="status">Connecting...</div>
+    <div class="instructions">
+      <p>Use the D-pad to move and the buttons for actions</p>
+    </div>
+  </div>
+  <div class="connection-status" id="connectionStatus"></div>
+  <div class="game-status" id="gameStatus">Waiting for game...</div>
+  <script>
+    // Get player number from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const playerId = parseInt(urlParams.get('player')) || 1;
+    document.getElementById('playerNumber').textContent = playerId;
+
+    // Initialize WebSocket connection
+    let ws;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    let isConnected = false;
+    let lastSentAction = null;
+    let isEliminated = false;
+
+    function connectWebSocket() {
+      // Get the hostname from the current URL
+      const hostname = window.location.hostname;
+      const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+      
+      // Determine WebSocket protocol based on current page protocol
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      
+      // Create WebSocket connection
+      ws = new WebSocket(`${protocol}//${hostname}:${port}`);
+      
+      ws.onopen = () => {
+        isConnected = true;
+        document.getElementById('status').textContent = 'Connected';
+        document.getElementById('connectionStatus').classList.add('connected');
+        reconnectAttempts = 0;
+        
+        // Send initial player info
+        ws.send(JSON.stringify({
+          type: 'controller',
+          playerId: playerId
+        }));
+      };
+
+      ws.onclose = () => {
+        isConnected = false;
+        document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
+        document.getElementById('connectionStatus').classList.remove('connected');
+        
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          setTimeout(connectWebSocket, 2000);
+        } else {
+          document.getElementById('status').textContent = 'Connection failed - Please refresh the page';
+        }
+      };
+
+      ws.onerror = () => {
+        document.getElementById('status').textContent = 'Connection error';
+        document.getElementById('connectionStatus').classList.remove('connected');
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Handle game status updates
+          if (data.type === 'gameStatus') {
+            updateGameStatus(data);
+          }
+          
+          // Handle player elimination
+          if (data.type === 'playerEliminated' && data.playerId === playerId) {
+            handleElimination();
+          }
+        } catch (e) {
+          console.error('Error parsing message:', e);
+        }
+      };
+    }
+    
+    function updateGameStatus(data) {
+      const gameStatus = document.getElementById('gameStatus');
+      
+      if (data.gameState === 'start') {
+        gameStatus.textContent = 'Game starting...';
+      } else if (data.gameState === 'running') {
+        gameStatus.textContent = 'Game in progress';
+      } else if (data.gameState === 'paused') {
+        gameStatus.textContent = 'Game paused';
+      } else if (data.gameState === 'gameover') {
+        gameStatus.textContent = `Game over - ${data.winner ? `Player ${data.winner} wins!` : 'No winner'}`;
+      }
+    }
+    
+    function handleElimination() {
+      isEliminated = true;
+      document.getElementById('status').textContent = 'You have been eliminated';
+      document.querySelector('.controller').classList.add('eliminated');
+    }
+
+    // Handle button presses
+    function handleButtonPress(action, pressed) {
+      if (!isConnected || isEliminated) return;
+      
+      // For D-pad buttons, we need to handle differently
+      if (action === 'left' || action === 'right') {
+        if (pressed) {
+          // If we're already pressing a direction and it's different, ignore
+          if (lastSentAction && lastSentAction !== action) return;
+          
+          lastSentAction = action;
+          ws.send(JSON.stringify({
+            type: 'controllerInput',
+            playerId: playerId,
+            action: action,
+            pressed: true
+          }));
+        } else {
+          // Only send release if this was the last action we sent
+          if (lastSentAction === action) {
+            lastSentAction = null;
+            ws.send(JSON.stringify({
+              type: 'controllerInput',
+              playerId: playerId,
+              action: action,
+              pressed: false
+            }));
+          }
+        }
+      } else {
+        // For other buttons (jump, camUp, camDown), just send the press
+        if (pressed) {
+          ws.send(JSON.stringify({
+            type: 'controllerInput',
+            playerId: playerId,
+            action: action,
+            pressed: true
+          }));
+        }
+      }
+    }
+
+    // Add event listeners for all buttons
+    document.querySelectorAll('.dpad-button, .action-button').forEach(button => {
+      const action = button.dataset.action;
+      
+      // Touch events
+      button.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        handleButtonPress(action, true);
+      });
+      
+      button.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        handleButtonPress(action, false);
+      });
+      
+      // Mouse events (for testing)
+      button.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        handleButtonPress(action, true);
+      });
+      
+      button.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        handleButtonPress(action, false);
+      });
+    });
+
+    // Prevent default touch behaviors
+    document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+
+    // Connect to WebSocket server
+    connectWebSocket();
+  </script>
+</body>
+</html> 
