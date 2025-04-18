@@ -20,79 +20,76 @@
     <link rel="manifest" href="site.webmanifest">
     
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Share+Tech+Mono&family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Styles -->
     <link rel="stylesheet" href="styles.css">
-    
-    <style>
-        .landing-container {
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: #000;
-            color: #0ff;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .game-title {
-            font-size: 64px;
-            margin-bottom: 30px;
-            text-shadow: 0 0 20px #0ff;
-            animation: glow 2s infinite alternate;
-        }
-        
-        .game-description {
-            max-width: 600px;
-            margin-bottom: 40px;
-            line-height: 1.6;
-            font-size: 18px;
-        }
-        
-        .start-button {
-            background: transparent;
-            color: #0ff;
-            border: 2px solid #0ff;
-            padding: 15px 40px;
-            font-size: 24px;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-decoration: none;
-            margin: 10px;
-            border-radius: 5px;
-        }
-        
-        .start-button:hover {
-            background: #0ff;
-            color: #000;
-            box-shadow: 0 0 20px #0ff;
-        }
-        
-        @keyframes glow {
-            from {
-                text-shadow: 0 0 20px #0ff;
-            }
-            to {
-                text-shadow: 0 0 30px #0ff, 0 0 40px #0ff;
-            }
-        }
-    </style>
 </head>
 <body>
-    <div class="landing-container">
-        <h1 class="game-title">PRISMATRIX</h1>
-        <p class="game-description">
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-text">INITIALIZING GRID...</div>
+    </div>
+
+    <main class="landing-container">
+        <h1 class="game-title" data-text="PRISMATRIX">PRISMATRIX</h1>
+        
+        <div class="game-description typed-text">
             Enter the grid in this modern take on the classic Prismatrix light cycle game. 
             Challenge your friends in stunning 3D multiplayer battles, leaving behind 
             neon trails as you compete to be the last rider standing.
-        </p>
-        <div>
-            <a href="playerSetup.html" class="start-button">PLAY NOW</a>
-            <a href="https://github.com/yourusername/prismatrix" target="_blank" class="start-button">GITHUB</a>
         </div>
-    </div>
+        
+        <div class="button-container">
+            <a href="playerSetup.html" class="neon-button" id="playButton">PLAY NOW</a>
+            <a href="https://github.com/sbeeredd04/HeadBobberGames" target="_blank" class="neon-button" id="githubButton">GITHUB</a>
+        </div>
+    </main>
+
+    <script>
+        // Show loading screen initially
+        const loadingScreen = document.getElementById('loadingScreen');
+        setTimeout(() => {
+            loadingScreen.style.opacity = '0';
+            setTimeout(() => {
+                loadingScreen.style.display = 'none';
+            }, 1000);
+        }, 2000);
+
+        // Add page transition effect when leaving
+        document.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (!this.target) {  // Only for internal links
+                    e.preventDefault();
+                    loadingScreen.style.display = 'flex';
+                    loadingScreen.style.opacity = '1';
+                    
+                    setTimeout(() => {
+                        window.location.href = this.href;
+                    }, 2000);
+                }
+            });
+        });
+
+        // Add glitch effect to title
+        const title = document.getElementById('mainTitle');
+        setInterval(() => {
+            if (title) {
+                title.style.animation = 'none';
+                void title.offsetWidth; // Trigger reflow
+                title.style.animation = 'glitch 4s infinite';
+            }
+        }, 8000);
+
+        // Fade in buttons one by one
+        const buttons = document.querySelectorAll('.neon-button');
+        buttons.forEach((button, index) => {
+            button.style.opacity = '0';
+            setTimeout(() => {
+                button.style.opacity = '1';
+                button.style.animation = 'fadeInScale 1s ease-out forwards, neonPulse 3s infinite';
+            }, 3000 + (index * 800));
+        });
+    </script>
 </body>
 </html> 
