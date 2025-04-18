@@ -55,18 +55,7 @@ Prismatrix is a modern take on the classic Prismatrix light cycle game, featurin
   - Camera height settings
 - **Trail Settings**: Customize trail duration and appearance
 
-## Technical Requirements
-- Modern web browser with WebGL support
-- For mobile controls: Smartphone with camera and web browser
-- Recommended resolution: 1920x1080 or higher
 
-## Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/prismatrix.git
-   ```
-2. Open `index.html` in a web browser
-   
 ## Development
 Built using:
 - Three.js for 3D graphics
@@ -74,16 +63,6 @@ Built using:
 - JavaScript ES6+
 - CSS3 for styling
 
-## Contributing
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Credits
-- Game Design & Development: [Your Name]
-- Inspired by the Prismatrix light cycle game
-- Built with Three.js and modern web technologies
 
 ## Future Updates
 - Online multiplayer support
